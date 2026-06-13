@@ -153,9 +153,11 @@
   <div class="tags">
     <span class="tag">OT / ICS Security</span>
     <span class="tag">Critical Infrastructure</span>
-    <span class="tag">CEMA &amp; Pen Testing</span>
+    <span class="tag">Threat Emulation</span>
     <span class="tag">Team Leadership</span>
-    <span class="tag">R&amp;D / Strategy</span>
+    <span class="tag">Research and Development</span>
+    <span class="tag">Cyber Strategy</span>
+    <span class="tag">Upskilling Cyber Professionals</span>
   </div>
 </div>
 
