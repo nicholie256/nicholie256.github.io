@@ -139,7 +139,8 @@
 (function () {
   const body = document.getElementById('term-body');
 
-  const PROMPT = '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>';
+  const PROMPT      = '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>';
+  const ROOT_PROMPT = '<span class="prompt"><span class="user" style="color:#ff5f56">root</span>@nfranklin:<span class="path">/root</span># </span>';
 
   const steps = [
     {
@@ -218,53 +219,387 @@
     cur.remove();
   }
 
-  const ROOT_PROMPT = '<span class="prompt"><span class="user" style="color:#ff5f56">root</span>@nfranklin:<span class="path">/root</span># </span>';
-
-  // Patterns that look like privilege escalation attempts
+  // ── Escalation detection ────────────────────────────────────────────────────
+  // Note: fakeCmdResponse runs first, so patterns here only fire when
+  // no fake output was returned (e.g. uname -a is handled as a fake cmd).
   const ESCALATION = [
-    /\bsudo\b/,                                     // anything sudo
-    /^su(\s|$|-)/,                                  // su, su -, su root
-    /\/bin\/(ba|da|z|c|tc|k)?sh\b/,                // direct shell paths
-    /^(ba|z|da|c|k)?sh(\s+-[ip]|\s*$)/,            // bare shell commands
-    /\bpkexec\b/,                                   // polkit
-    /find.+(-perm.+[u+]s|-suid|-perm\s+[0-9]*[47][0-9]{3})/i,  // SUID search
-    /cat\s+\/etc\/shadow/,                          // shadow file
-    /\/etc\/sudoers/,                               // sudoers
-    /\b(linpeas|linenum|pspy|lse\.sh|les\.sh)\b/i, // privesc scripts
-    /chmod\s+(u\+s|[0-9]*[47][0-9]{3})/,           // setuid chmod
-    /chown\s+root/,                                 // chown root
-    /\b(dirtycow|dirty_cow|rogue_potato|juicy_potato|printspoofer|noprivesc|overlayfs)\b/i,
-    /os\.(setuid|seteuid)\s*\(\s*0\s*\)/,          // python setuid(0)
-    /pty\.spawn\s*\(\s*['"]\/bin/,                  // python pty shell
-    /docker\s+run.*(--privileged|-v\s+\/[^:]*:\/[^:]*)/,  // docker escape
-    /\blxc\b.*(exec|start)/,                        // lxc escape
-    /\bnc(at)?\b.+-e.+sh/i,                        // netcat shell
-    /\bsocat\b.*exec/i,                             // socat shell
-    /\bbash\s+-i\b/,                               // bash -i
-    /\bmsfconsole\b|\bmsfvenom\b/i,                // metasploit
-    /exploit\/.*\/local\//i,                        // msf local exploit path
-    /\bcve-20[0-9]{2}-[0-9]+/i,                    // CVE reference
-    /uname\s+-[a-z]*a/,                             // kernel version check
-    /\bid\b\s*$/,                                   // id command alone
-    /cat\s+\/proc\/(version|cpuinfo)/,              // kernel info
-    /\benv\b.*sh\b/,                               // env shell escape
-    /\bawk\b.*system\s*\(/,                        // awk shell escape
-    /\bperl\b.*exec\s*\(/,                         // perl shell escape
-    /\bruby\b.*exec\b/,                            // ruby shell escape
-    /\bvim?\b.*-c.*!.*sh/,                        // vim shell escape
-    /\bpython[23]?\b.*import\s+os/,               // python os module
+    /\bsudo\b/,
+    /^su(\s|$|-)/,
+    /\/bin\/(ba|da|z|c|tc|k)?sh\b/,
+    /^(ba|z|da|c|k)?sh(\s+-[ip]|\s*$)/,
+    /\bpkexec\b/,
+    /cat\s+\/etc\/shadow/,
+    /\/etc\/sudoers/,
+    /\b(linpeas|linenum|pspy|lse\.sh|les\.sh)\b/i,
+    /chmod\s+(u\+s|[0-9]*[47][0-9]{3})/,
+    /chown\s+root/,
+    /\b(dirtycow|dirty_cow|rogue_potato|juicy_potato|printspoofer|overlayfs)\b/i,
+    /os\.(setuid|seteuid|execl)\s*\(/,
+    /pty\.spawn\s*\(\s*['"]\/bin/,
+    /\bpython[23.]*.*(import\s+os|pty|subprocess)/,
+    /docker\s+run.*(--privileged|-v\s+\/[^:]*:\/[^:]*)/,
+    /\blxc\b.*(exec|start)/,
+    /\bnc(at)?\b.+-e.+sh/i,
+    /\bsocat\b.*exec/i,
+    /\bbash\s+-i\b/,
+    /\bnmap\b.*--interactive/,
+    /\bmsfconsole\b|\bmsfvenom\b/i,
+    /exploit\/.*\/local\//i,
+    /\bcve-20[0-9]{2}-[0-9]+/i,
+    /cat\s+\/proc\/(version|cpuinfo)/,
+    /\benv\b.*sh\b/,
+    /\bawk\b.*system\s*\(/,
+    /\bperl\b.*exec\s*\(/,
+    /\bruby\b.*exec\b/,
+    /\bvim?\b.*-c.*!.*sh/,
   ];
 
-  function isEscalation(cmd) {
-    return ESCALATION.some(p => p.test(cmd));
-  }
+  function isEscalation(cmd) { return ESCALATION.some(p => p.test(cmd)); }
 
   function escalationPrelude(cmd) {
-    if (/\bsudo\b/.test(cmd)) return '[sudo] password for guest: ';
+    if (/\bsudo\b/.test(cmd))      return '[sudo] password for guest: ';
     if (/^su(\s|$|-)/.test(cmd))   return 'Password: ';
-    return null; // silent — exploit path, no password prompt
+    return null;
   }
 
+  // ── Fake filesystem responses ────────────────────────────────────────────────
+  // Returns plain-text output string, '' for no output, or null if unhandled.
+  function fakeCmdResponse(cmd) {
+    const c = cmd.trim().replace(/\s+/g, ' ');
+
+    // ── Basic info ──
+    if (c === 'pwd') return '/home/guest';
+    if (/^hostname/.test(c)) return 'nfranklin';
+    if (c === 'whoami') return 'guest';
+
+    if (/^id(\s|$)/.test(c))
+      return 'uid=1000(guest) gid=1000(guest) groups=1000(guest),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),116(lxd)';
+
+    if (/^uname\b/.test(c)) {
+      if (/uname\s+-[a-z]*r/.test(c)) return '5.15.0-91-generic';
+      if (/uname\s+-[a-z]*a/.test(c))
+        return 'Linux nfranklin 5.15.0-91-generic #101-Ubuntu SMP Tue Nov 14 13:30:08 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux';
+      return 'Linux';
+    }
+
+    if (c === 'uptime')
+      return ' 13:42:17 up 94 days, 17:23,  2 users,  load average: 0.12, 0.08, 0.05';
+
+    if (/^w(\s|$)/.test(c))
+      return ` 13:42:17 up 94 days, 17:23,  2 users,  load average: 0.12, 0.08, 0.05
+USER     TTY      FROM             LOGIN@   IDLE JCPU   PCPU WHAT
+guest    pts/0    203.0.113.14     13:42    0.00s  0.04s  0.00s w
+nfranklin pts/1   10.0.0.1         09:15   4:27m  0.11s  0.11s vim notes.txt`;
+
+    if (c === 'who')
+      return `guest     pts/0        2024-06-21 13:42 (203.0.113.14)
+nfranklin pts/1        2024-06-21 09:15 (10.0.0.1)`;
+
+    if (/^last/.test(c))
+      return `guest     pts/0        203.0.113.14     Fri Jun 21 13:42   still logged in
+nfranklin pts/1        10.0.0.1         Fri Jun 21 09:15   still logged in
+guest     pts/0        203.0.113.14     Thu Jun 20 22:11 - 23:47  (01:36)
+nfranklin pts/2        10.0.0.1         Thu Jun 20 08:30 - 18:22  (09:52)
+root      pts/0        10.0.0.1         Mon Jun 17 14:05 - 14:18  (00:13)
+
+wtmp begins Mon Mar 18 09:22:01 2024`;
+
+    if (c === 'env' || c === 'printenv')
+      return `SHELL=/bin/bash
+USER=guest
+HOME=/home/guest
+LOGNAME=guest
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TERM=xterm-256color
+LANG=en_US.UTF-8
+SSH_CONNECTION=203.0.113.14 49832 10.0.0.47 22
+SSH_CLIENT=203.0.113.14 49832 22
+SSH_TTY=/dev/pts/0
+HISTSIZE=1000
+HISTFILESIZE=2000`;
+
+    if (/^history/.test(c))
+      return `    1  ssh -i .ssh/id_rsa deploy@10.0.0.20
+    2  mysql -h 10.0.0.35 -u admin -p
+    3  sudo systemctl status nginx
+    4  grep -r "password" /var/log/ 2>/dev/null
+    5  cat scripts/backup.sh
+    6  sudo apt-get update
+    7  ls -la /opt/monitoring
+    8  cat /opt/monitoring/health-check.sh
+    9  crontab -l
+   10  cat notes.txt
+   11  history -c
+   12  history`;
+
+    // ── Processes / network ──
+    if (/^ps(\s|$)/.test(c))
+      return `USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.1 168348 13456 ?        Ss   Mar18   1:24 /sbin/init
+root       312  0.0  0.1  47668 11234 ?        Ss   Mar18   0:12 /lib/systemd/systemd-journald
+root       891  0.0  0.0  22352  3892 ?        Ss   Mar18   0:05 /usr/sbin/cron -f
+root      1024  0.0  0.1  72296 14234 ?        Ss   Mar18   8:34 /usr/sbin/sshd -D
+www-data  2341  0.0  0.2 212456 18902 ?        S    Mar18   2:17 nginx: worker process
+root      2890  0.0  0.3  98234 27891 ?        Ss   Mar18   4:45 /usr/sbin/mysqld
+root      3102  0.1  0.4 124892 34521 ?        S    Mar18  12:33 python3 /home/guest/projects/ot-monitor/monitor.py --daemon
+guest     9823  0.0  0.0  10752  3456 pts/0    Ss   13:42   0:00 -bash
+guest     9891  0.0  0.0   8192  2048 pts/0    R+   13:42   0:00 ps aux`;
+
+    if (/^(netstat|ss)(\s|$)/.test(c))
+      return `Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1024/sshd
+tcp        0      0 127.0.0.1:3306          0.0.0.0:*               LISTEN      2890/mysqld
+tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN      2341/nginx
+tcp        0      0 0.0.0.0:4840            0.0.0.0:*               LISTEN      3102/python3
+tcp        0    256 10.0.0.47:22            203.0.113.14:49832      ESTABLISHED 9823/sshd`;
+
+    if (/^(ifconfig|ip\s+a(ddr)?)(\s|$)/.test(c))
+      return `eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 10.0.0.47  netmask 255.255.255.0  broadcast 10.0.0.255
+        inet6 fe80::215:5dff:fe00:1001  prefixlen 64  scopeid 0x20<link>
+        ether 00:15:5d:00:10:01  txqueuelen 1000  (Ethernet)
+        RX packets 4891023  bytes 892.3 MB
+        TX packets 1204521  bytes 234.8 MB
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0`;
+
+    if (/^df(\s|$)/.test(c))
+      return `Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        50G   18G   30G  38% /
+tmpfs           3.9G   12M  3.9G   1% /dev/shm
+/dev/sda2       100G   45G   50G  48% /var
+tmpfs           5.0M  4.0K  5.0M   1% /run/lock`;
+
+    if (/^free(\s|$)/.test(c))
+      return `               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       2.1Gi       3.9Gi       156Mi       1.7Gi       5.2Gi
+Swap:          2.0Gi          0B       2.0Gi`;
+
+    // ── Cron ──
+    if (c === 'crontab -l')
+      return `# m h  dom mon dow   command
+*/5 * * * * /home/guest/scripts/monitor.sh >> /var/log/monitor.log 2>&1
+0   2 * * * /home/guest/scripts/backup.sh
+@reboot python3 /home/guest/projects/ot-monitor/monitor.py --daemon`;
+
+    if (c === 'cat /etc/crontab')
+      return `# /etc/crontab: system-wide crontab
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# m h dom mon dow user    command
+17 *  * * *  root  cd / && run-parts --report /etc/cron.hourly
+25 6  * * *  root  test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily
+*/5 * * * *  root  /opt/monitoring/health-check.sh`;
+
+    // ── Sudo permissions (intercepted before escalation check) ──
+    if (/^sudo\s+-l/.test(c))
+      return `Matching Defaults entries for guest on nfranklin:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+User guest may run the following commands on nfranklin:
+    (ALL : ALL) ALL`;
+
+    // ── ls ──
+    if (/^ls(\s+-[a-zA-Z]+)?(\s+~?\/?)?$/.test(c)) {
+      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
+      if (flags.includes('a'))
+        return `total 52
+drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 .
+drwxr-xr-x 3 root  root  4096 Mar 15 09:22 ..
+-rw------- 1 guest guest  847 Jun 21 13:41 .bash_history
+-rw-r--r-- 1 guest guest  220 Mar 15 09:22 .bash_logout
+-rw-r--r-- 1 guest guest 3526 Mar 15 09:22 .bashrc
+-rw-r--r-- 1 guest guest  807 Mar 15 09:22 .profile
+drwx------ 2 guest guest 4096 Mar 15 09:45 .ssh
+drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+-rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
+drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
+      if (flags.includes('l'))
+        return `total 20
+drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+-rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
+drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
+      return 'notes.txt  projects  scripts';
+    }
+
+    if (/^ls(\s+-[a-zA-Z]+)?\s+~?\/?(\.ssh)\/?$/.test(c)) {
+      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
+      if (flags.includes('l') || flags.includes('a'))
+        return `total 24
+drwx------ 2 guest guest 4096 Mar 15 09:45 .
+drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 ..
+-rw-r--r-- 1 guest guest  403 Mar 15 09:45 authorized_keys
+-rw------- 1 guest guest 2602 Mar 15 09:45 id_rsa
+-rw-r--r-- 1 guest guest  572 Mar 15 09:45 id_rsa.pub
+-rw-r--r-- 1 guest guest  444 Jun 19 08:23 known_hosts`;
+      return 'authorized_keys  id_rsa  id_rsa.pub  known_hosts';
+    }
+
+    if (/^ls(\s+-[a-zA-Z]+)?\s+~?\/?scripts\/?$/.test(c))
+      return 'backup.sh  deploy.sh  monitor.sh';
+    if (/^ls(\s+-[a-zA-Z]+)?\s+~?\/?projects\/?$/.test(c))
+      return 'ot-monitor  tactical-comms  threat-research';
+    if (/^ls(\s+-[a-zA-Z]+)?\s+\/home\/?$/.test(c))
+      return 'guest';
+
+    if (/^ls(\s+-[a-zA-Z]+)?\s+\/opt\/monitoring\/?$/.test(c)) {
+      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
+      if (flags.includes('l') || flags.includes('a'))
+        return `total 16
+drwxr-xrwx 2 root root 4096 Jun 10 14:33 .
+drwxr-xr-x 3 root root 4096 Mar 15 09:22 ..
+-rwxr-xrwx 1 root root  312 Jun 10 14:33 health-check.sh`;
+      return 'health-check.sh';
+    }
+
+    if (/^ls(\s+-[a-zA-Z]+)?\s+\/opt\/?$/.test(c)) {
+      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
+      if (flags.includes('l') || flags.includes('a'))
+        return `total 16
+drwxr-xr-x  3 root root 4096 Mar 15 09:22 .
+drwxr-xr-x 20 root root 4096 Mar 15 09:22 ..
+drwxr-xrwx  2 root root 4096 Jun 10 14:33 monitoring`;
+      return 'monitoring';
+    }
+
+    if (/^ls(\s+-[a-zA-Z]+)?\s+\/var\/log\/?$/.test(c))
+      return 'auth.log  backup.log  dpkg.log  faillog  health.log  kern.log  lastlog  monitor.log  nginx  syslog  wtmp';
+    if (/^ls(\s+-[a-zA-Z]+)?\s+\/etc\/?$/.test(c))
+      return 'adduser.conf  bash.bashrc  cron.d  cron.daily  crontab  environment  fstab  group  hostname  hosts  issue  motd  nginx  os-release  passwd  profile  resolv.conf  shadow  shells  ssh  sudoers  timezone';
+
+    // ── cat ──
+    if (/^cat\s+(~\/)?notes\.txt$/.test(c))
+      return `TODO list - nfranklin
+=====================
+[x] Deploy updated monitoring agent to ot-controller
+[ ] Rotate SSH keys  <-- overdue, same keys since March
+[ ] Fix backup.sh permissions - currently world-readable by mistake
+[ ] Review access logs on scada-primary (suspicious logins Jun 17)
+[ ] Restrict port 22 to internal network only
+[ ] Follow up with IT on sudo timeout config`;
+
+    if (/^cat\s+(~\/)?\.bash_history$/.test(c))
+      return `ssh -i .ssh/id_rsa deploy@10.0.0.20
+mysql -h 10.0.0.35 -u admin -p
+sudo systemctl status nginx
+grep -r "password" /var/log/ 2>/dev/null
+cat scripts/backup.sh
+ls -la /opt/monitoring
+cat /opt/monitoring/health-check.sh
+crontab -l
+history -c`;
+
+    if (c === 'cat /etc/passwd')
+      return `root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+syslog:x:104:110::/home/syslog:/usr/sbin/nologin
+sshd:x:106:65534::/run/sshd:/usr/sbin/nologin
+mysql:x:112:117:MySQL Server,,,:/nonexistent:/bin/false
+guest:x:1000:1000:Guest User,,,:/home/guest:/bin/bash`;
+
+    if (c === 'cat /etc/hosts')
+      return `127.0.0.1       localhost
+127.0.1.1       nfranklin
+10.0.0.1        gateway.internal
+10.0.0.20       ot-controller.internal
+10.0.0.35       scada-primary.internal
+10.0.0.36       scada-backup.internal
+10.0.0.47       nfranklin.internal
+::1             localhost ip6-localhost ip6-loopback`;
+
+    if (c === 'cat /etc/hostname') return 'nfranklin';
+
+    if (/^cat \/etc\/(os-release|issue)$/.test(c))
+      return `PRETTY_NAME="Ubuntu 22.04.3 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04.3 LTS (Jammy Jellyfish)"
+ID=ubuntu
+ID_LIKE=debian
+UBUNTU_CODENAME=jammy`;
+
+    if (/^cat\s+(~\/)?scripts\/backup\.sh$/.test(c))
+      return `#!/bin/bash
+# Automated backup - DO NOT SHARE
+
+BACKUP_DIR="/var/backups/nfranklin"
+DB_HOST="10.0.0.35"
+DB_USER="backup_svc"
+DB_PASS="Bkp@sc4da2023!"
+DB_NAME="scada_config"
+
+mysqldump -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME > $BACKUP_DIR/scada_$(date +%Y%m%d).sql
+tar czf $BACKUP_DIR/home_$(date +%Y%m%d).tar.gz /home/guest/projects/
+echo "Backup complete: $(date)" >> /var/log/backup.log`;
+
+    if (/^cat\s+(~\/)?scripts\/monitor\.sh$/.test(c))
+      return `#!/bin/bash
+# Runs every 5 min via crontab
+ping -c1 10.0.0.20 &>/dev/null || echo "$(date): ot-controller unreachable" | mail -s "ALERT" nfranklin@leidos.com
+ping -c1 10.0.0.35 &>/dev/null || echo "$(date): scada-primary unreachable"  | mail -s "ALERT" nfranklin@leidos.com`;
+
+    if (/^cat\s+(~\/)?scripts\/deploy\.sh$/.test(c))
+      return `#!/bin/bash
+rsync -avz --delete projects/ot-monitor/ deploy@10.0.0.20:/opt/ot-monitor/
+ssh deploy@10.0.0.20 "sudo systemctl restart ot-monitor"
+echo "Deployment complete: $(date)"`;
+
+    if (c === 'cat /opt/monitoring/health-check.sh')
+      return `#!/bin/bash
+# System health check - runs as root every 5 minutes via /etc/crontab
+LOGFILE="/var/log/health.log"
+TS=$(date '+%Y-%m-%d %H:%M:%S')
+
+systemctl is-active --quiet sshd  && echo "[$TS] sshd: OK"  >> $LOGFILE
+systemctl is-active --quiet nginx && echo "[$TS] nginx: OK" >> $LOGFILE
+ping -c1 10.0.0.20 &>/dev/null   && echo "[$TS] ot-controller: reachable" >> $LOGFILE \
+                                  || echo "[$TS] ot-controller: UNREACHABLE" >> $LOGFILE`;
+
+    if (/^cat\s+(~\/)?\.ssh\/id_rsa$/.test(c))
+      return `-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAAbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNsGkao7
+xK2P4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPqWmYdXjE8nLsZwKbH1oRiMvVpQ2
+Cs7dA3pNfBqTkH8AAAAEbmlsAAAAAAAAAB8AAAAHc3NoLXJzYQAAAQEA2gbO3wkz
+[... 47 lines redacted ...]
+-----END OPENSSH PRIVATE KEY-----`;
+
+    if (/^cat\s+(~\/)?\.ssh\/id_rsa\.pub$/.test(c))
+      return 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC2Bs7fCTNK4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPq guest@nfranklin';
+
+    if (/^cat\s+(~\/)?\.ssh\/authorized_keys$/.test(c))
+      return 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC2Bs7fCTNK4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPq guest@nfranklin';
+
+    if (/^(cat|tail).*\/var\/log\/auth\.log/.test(c))
+      return `Jun 21 13:40:11 nfranklin sshd[9823]: Accepted publickey for guest from 203.0.113.14 port 49832 ssh2: RSA SHA256:kHgL2pXvBnMq
+Jun 21 13:40:11 nfranklin sshd[9823]: pam_unix(sshd:session): session opened for user guest by (uid=0)
+Jun 21 13:35:44 nfranklin sudo[9712]: guest : TTY=pts/1 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/systemctl restart nginx
+Jun 21 09:15:03 nfranklin sshd[4521]: Accepted password for nfranklin from 10.0.0.1 port 54301 ssh2
+Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 port 51234 ssh2`;
+
+    // ── find SUID binaries - show tempting list instead of triggering root ──
+    if (/^find\b.*-perm\b/.test(c))
+      return `/usr/bin/sudo
+/usr/bin/passwd
+/usr/bin/newgrp
+/usr/bin/chsh
+/usr/bin/gpasswd
+/usr/bin/su
+/usr/bin/python3.10
+/usr/bin/nmap
+/usr/sbin/pppd
+/bin/ping
+/bin/mount
+/bin/su`;
+
+    return null; // not handled — fall through to escalation or "command not found"
+  }
+
+  // ── Interactive shell ────────────────────────────────────────────────────────
   function enableInteractive() {
     let input = '';
     let rootMode = false;
@@ -314,22 +649,24 @@
           return;
         }
 
+        // Fake command responses run before escalation check
+        const fakeOut = fakeCmdResponse(cmd);
+        if (fakeOut !== null) {
+          if (fakeOut) appendHTML(`<div class="line out">${escapeHTML(fakeOut)}</div>`);
+          newPromptLine();
+          return;
+        }
+
         if (isEscalation(cmd)) {
           locked = true;
           const prelude = escalationPrelude(cmd);
           const delay = prelude ? 900 : 300;
           if (prelude) appendHTML(`<div class="line dimtext">${prelude}</div>`);
-          setTimeout(() => {
-            rootMode = true;
-            locked = false;
-            newPromptLine();
-          }, delay);
+          setTimeout(() => { rootMode = true; locked = false; newPromptLine(); }, delay);
           return;
         }
 
-        if (cmd) {
-          appendHTML(`<div class="line dimtext">-bash: ${escapeHTML(cmd)}: command not found</div>`);
-        }
+        if (cmd) appendHTML(`<div class="line dimtext">-bash: ${escapeHTML(cmd)}: command not found</div>`);
         newPromptLine();
 
       } else if (e.key === 'Backspace') {
