@@ -218,15 +218,19 @@
     cur.remove();
   }
 
+  const ROOT_PROMPT = '<span class="prompt"><span class="user" style="color:#ff5f56">root</span>@nfranklin:<span class="path">/root</span># </span>';
+
   function enableInteractive() {
     let input = '';
+    let rootMode = false;
+    let locked = false;
     let currentLine, currentText;
 
     function newPromptLine() {
       input = '';
       currentLine = document.createElement('div');
       currentLine.className = 'line';
-      currentLine.innerHTML = PROMPT;
+      currentLine.innerHTML = rootMode ? ROOT_PROMPT : PROMPT;
       currentText = document.createElement('span');
       const cur = document.createElement('span');
       cur.className = 'cursor';
@@ -239,9 +243,21 @@
     newPromptLine();
 
     document.addEventListener('keydown', function handler(e) {
+      if (locked) return;
+
       if (e.key === 'Enter') {
         const cmd = input.trim();
         currentLine.querySelector('.cursor')?.remove();
+
+        if (rootMode) {
+          if (cmd === 'exit') {
+            rootMode = false;
+          } else if (cmd) {
+            appendHTML('<div class="line out">Hey, we appreciate your effort. Find me on Discord at @nicholie and let\'s talk.</div>');
+          }
+          newPromptLine();
+          return;
+        }
 
         if (cmd === 'exit') {
           appendHTML('<div class="line dimtext">logout</div>');
@@ -250,6 +266,17 @@
             window.close();
             appendHTML('<div class="line dimtext">[close this tab to exit]</div>');
           }, 400);
+          return;
+        }
+
+        if (cmd === 'sudo su') {
+          locked = true;
+          appendHTML('<div class="line dimtext">[sudo] password for guest: </div>');
+          setTimeout(() => {
+            rootMode = true;
+            locked = false;
+            newPromptLine();
+          }, 900);
           return;
         }
 
