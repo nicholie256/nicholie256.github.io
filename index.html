@@ -38,36 +38,40 @@
   .terminal {
     width: 100%;
     max-width: 720px;
+    max-height: 85vh;
     background: #1b1612;
     border: 1px solid #2e2620;
-    border-radius: 8px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,159,67,0.04);
+    border-radius: 0;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
 
   .titlebar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    background: #201a15;
-    border-bottom: 1px solid #2e2620;
+    justify-content: center;
+    padding: 5px 14px;
+    background: var(--dim);
+    flex-shrink: 0;
   }
-  .dot { width: 11px; height: 11px; border-radius: 50%; }
-  .dot.red { background: #ff5f56; }
-  .dot.yellow { background: #ffbd2e; }
-  .dot.green { background: #27c93f; }
   .titlebar-label {
-    margin-left: auto;
-    color: var(--dim);
+    color: var(--bg);
     font-size: 0.78rem;
+    font-weight: 700;
     letter-spacing: 0.5px;
   }
 
   .body {
     padding: 26px 28px 32px;
     font-size: 0.98rem;
+    flex: 1;
+    overflow-y: auto;
   }
+  .body::-webkit-scrollbar { width: 6px; }
+  .body::-webkit-scrollbar-track { background: transparent; }
+  .body::-webkit-scrollbar-thumb { background: #3a3128; border-radius: 0; }
 
   .line { margin: 0 0 10px; white-space: pre-wrap; word-break: break-word; }
   .prompt { color: var(--dim); }
@@ -111,7 +115,7 @@
     width: 9px;
     height: 1.05em;
     background: var(--cursor);
-    margin-left: 4px;
+    margin-left: 2px;
     vertical-align: -2px;
     animation: blink 1s steps(1) infinite;
   }
@@ -126,50 +130,114 @@
 <body>
   <div class="terminal">
     <div class="titlebar">
-      <span class="dot red"></span>
-      <span class="dot yellow"></span>
-      <span class="dot green"></span>
-      <span class="titlebar-label">guest@nfranklin — zsh</span>
+      <span class="titlebar-label">guest@nfranklin: ~</span>
     </div>
-    <div class="body">
-
-<div class="line dimtext">Last login: Sat Jun 21 13:42:17 on ttys002</div>
-
-<div class="ascii">##    ##  ########
-###   ##  ##
-####  ##  ######
-## ## ##  ##
-##  ####  ##
-##   ###  ##
-##    ##  ##</div>
-<div class="ascii-sub">nicholas c. franklin</div>
-
-<div class="line"><span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>whoami</div>
-<div class="line out">Nicholas C. Franklin</div>
-<div class="line out">Director of Cybersecurity for Operational Technology (OT) &amp; Tactical Systems @ <a href="https://www.leidos.com/" target="_blank" rel="noopener">Leidos</a></div>
-
-<div class="line"><span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>cat status.txt</div>
-<div class="line out">&gt; Focus: OT / ICS / Tactical Systems cybersecurity<br>&gt; Availability: not accepting consideration for other positions at this time</div>
-
-<div class="line"><span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>cat skills.txt</div>
-<div class="line">
-  <div class="tags">
-    <span class="tag">OT / ICS Security</span>
-    <span class="tag">Critical Infrastructure</span>
-    <span class="tag">Threat Emulation</span>
-    <span class="tag">Team Leadership</span>
-    <span class="tag">Research and Development</span>
-    <span class="tag">Cyber Strategy</span>
-    <span class="tag">Upskilling Cyber Professionals</span>
+    <div class="body" id="term-body"></div>
   </div>
-</div>
 
-<div class="line"><span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>cat contact.txt</div>
-<div class="line out">email&nbsp;&nbsp;&nbsp;:: <a href="mailto:nicholascfranklin@gmail.com">nicholascfranklin@gmail.com</a><br>linkedin:: <a href="https://www.linkedin.com/in/nicholas-franklin-bab45375/" target="_blank" rel="noopener">linkedin.com/in/nicholas-franklin</a><br>github&nbsp;&nbsp;:: <a href="https://github.com/nicholie256" target="_blank" rel="noopener">github.com/nicholie256</a></div>
+<script>
+(function () {
+  const body = document.getElementById('term-body');
 
-<div class="line"><span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span><span class="cursor"></span></div>
+  const PROMPT = '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>';
 
-    </div>
-  </div>
+  const steps = [
+    {
+      kind: 'instant',
+      html: '<div class="line dimtext">Last login: Sat Jun 21 13:42:17 from 192.168.1.1 on pts/0</div>' +
+            '<div class="ascii">##    ##  ########\n###   ##  ##\n####  ##  ######\n## ## ##  ##\n##  ####  ##\n##   ###  ##\n##    ##  ##</div>' +
+            '<div class="ascii-sub">nicholas c. franklin</div>'
+    },
+    {
+      kind: 'cmd',
+      cmd: 'whoami',
+      html: '<div class="line out">Nicholas C. Franklin</div>' +
+            '<div class="line out">Director of Cybersecurity for Operational Technology (OT) &amp; Tactical Systems @ <a href="https://www.leidos.com/" target="_blank" rel="noopener">Leidos</a></div>'
+    },
+    {
+      kind: 'cmd',
+      cmd: 'cat status.txt',
+      html: '<div class="line out">&gt; Focus: OT / ICS / Tactical Systems cybersecurity\n&gt; Availability: not accepting consideration for other positions at this time</div>'
+    },
+    {
+      kind: 'cmd',
+      cmd: 'cat skills.txt',
+      html: '<div class="line"><div class="tags">' +
+            '<span class="tag">OT / ICS Security</span>' +
+            '<span class="tag">Critical Infrastructure</span>' +
+            '<span class="tag">Threat Emulation</span>' +
+            '<span class="tag">Team Leadership</span>' +
+            '<span class="tag">Research and Development</span>' +
+            '<span class="tag">Cyber Strategy</span>' +
+            '<span class="tag">Upskilling Cyber Professionals</span>' +
+            '</div></div>'
+    },
+    {
+      kind: 'cmd',
+      cmd: 'cat contact.txt',
+      html: '<div class="line out">' +
+            'email   :: <a href="mailto:nicholascfranklin@gmail.com">nicholascfranklin@gmail.com</a>\n' +
+            'linkedin:: <a href="https://www.linkedin.com/in/nicholas-franklin-bab45375/" target="_blank" rel="noopener">linkedin.com/in/nicholas-franklin</a>\n' +
+            'github  :: <a href="https://github.com/nicholie256" target="_blank" rel="noopener">github.com/nicholie256</a>' +
+            '</div>'
+    }
+  ];
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function scrollBottom() {
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function appendHTML(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    while (tmp.firstChild) body.appendChild(tmp.firstChild);
+    scrollBottom();
+  }
+
+  async function typeCmd(cmd) {
+    const line = document.createElement('div');
+    line.className = 'line';
+    line.innerHTML = PROMPT;
+    const text = document.createElement('span');
+    const cur = document.createElement('span');
+    cur.className = 'cursor';
+    line.appendChild(text);
+    line.appendChild(cur);
+    body.appendChild(line);
+
+    for (const ch of cmd) {
+      text.textContent += ch;
+      scrollBottom();
+      await sleep(30 + Math.random() * 60);
+    }
+
+    cur.remove();
+  }
+
+  async function run() {
+    for (const step of steps) {
+      if (step.kind === 'instant') {
+        appendHTML(step.html);
+        await sleep(350);
+      } else {
+        await sleep(500 + Math.random() * 400);
+        await typeCmd(step.cmd);
+        await sleep(80 + Math.random() * 120);
+        appendHTML(step.html);
+      }
+    }
+
+    const finalLine = document.createElement('div');
+    finalLine.className = 'line';
+    finalLine.innerHTML = PROMPT + '<span class="cursor"></span>';
+    body.appendChild(finalLine);
+    scrollBottom();
+  }
+
+  run();
+})();
+</script>
 </body>
 </html>
