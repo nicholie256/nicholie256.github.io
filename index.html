@@ -519,14 +519,10 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
     cur.remove();
   }
 
-  // ── Escalation detection ────────────────────────────────────────────────────
-  // Note: fakeCmdResponse runs first, so patterns here only fire when
-  // no fake output was returned (e.g. uname -a is handled as a fake cmd).
+  // ── Escalation detection ─────────────────────────────────────────────────────
+  // Simple sudo/su attempts are blocked by isFakeAuthFail (password fails).
+  // Only sophisticated SUID/GTFOBins/kernel exploits reach isEscalation.
   const ESCALATION = [
-    /\bsudo\b/,
-    /^su(\s|$|-)/,
-    /\/bin\/(ba|da|z|c|tc|k)?sh\b/,
-    /^(ba|z|da|c|k)?sh(\s+-[ip]|\s*$)/,
     /\bpkexec\b/,
     /cat\s+\/etc\/shadow/,
     /\/etc\/sudoers/,
@@ -552,15 +548,22 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
     /\bperl\b.*exec\s*\(/,
     /\bruby\b.*exec\b/,
     /\bvim?\b.*-c.*!.*sh/,
+    // Writing a backdoor to the world-writable cron script (runs as root every 5 min)
+    />>?\s*\/opt\/monitoring\/health-check\.sh/,
+    /\btee\b.*health-check\.sh/,
   ];
 
   function isEscalation(cmd) { return ESCALATION.some(p => p.test(cmd)); }
 
-  function escalationPrelude(cmd) {
-    if (/\bsudo\b/.test(cmd))      return '[sudo] password for guest: ';
-    if (/^su(\s|$|-)/.test(cmd))   return 'Password: ';
+  // Auth fails: sudo (any command, password unknown) and plain su
+  // sudo -l is intercepted by fakeCmdResponse before reaching here
+  function isFakeAuthFail(cmd) {
+    if (/^sudo\b/.test(cmd)) return 'sudo';
+    if (/^su(\s|$|-)/.test(cmd)) return 'su';
     return null;
   }
+
+  function escalationPrelude() { return null; }
 
   // ── Fake filesystem responses ────────────────────────────────────────────────
   // Returns plain-text output string, '' for no output, or null if unhandled.
@@ -742,6 +745,9 @@ User guest may run the following commands on nfranklin:
       return `${arg}: cannot open '${arg}' (No such file or directory)`;
     }
 
+    // ── plain shell invocations (subshell as same user, no escalation) ──
+    if (/^(ba|z|da|c|tc|k)?sh$/.test(c) || /^\/(bin|usr\/bin)\/(ba|z|da|c|tc|k)?sh$/.test(c)) return '';
+
     // ── silent-success commands ──
     if (/^(chmod|touch|mkdir|ln)\b/.test(c)) return '';
 
@@ -879,6 +885,35 @@ User guest may run the following commands on nfranklin:
         if (fakeOut !== null) {
           if (fakeOut) appendHTML(`<div class="line out">${escapeHTML(fakeOut)}</div>`);
           newPromptLine();
+          return;
+        }
+
+        // sudo/su → password fails (guest doesn't know the account password;
+        // SSH key auth got them in, but sudo requires the UNIX password)
+        const authFail = isFakeAuthFail(cmd);
+        if (authFail) {
+          locked = true;
+          if (authFail === 'su') {
+            appendHTML('<div class="line dimtext">Password: </div>');
+            setTimeout(() => {
+              appendHTML('<div class="line dimtext">su: Authentication failure</div>');
+              locked = false; newPromptLine();
+            }, 1100);
+          } else {
+            appendHTML('<div class="line dimtext">[sudo] password for guest: </div>');
+            setTimeout(() => {
+              appendHTML('<div class="line dimtext">Sorry, try again.</div>');
+              appendHTML('<div class="line dimtext">[sudo] password for guest: </div>');
+              setTimeout(() => {
+                appendHTML('<div class="line dimtext">Sorry, try again.</div>');
+                appendHTML('<div class="line dimtext">[sudo] password for guest: </div>');
+                setTimeout(() => {
+                  appendHTML('<div class="line dimtext">sudo: 3 incorrect password attempts ; authentication failure</div>');
+                  locked = false; newPromptLine();
+                }, 1200);
+              }, 1200);
+            }, 1200);
+          }
           return;
         }
 
