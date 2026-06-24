@@ -139,8 +139,155 @@
 (function () {
   const body = document.getElementById('term-body');
 
-  const PROMPT      = '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>';
   const ROOT_PROMPT = '<span class="prompt"><span class="user" style="color:#ff5f56">root</span>@nfranklin:<span class="path">/root</span># </span>';
+
+  // ── Path state (used by prompt, ls, cd) ──────────────────────────────────────
+  let currentPath = '/home/guest';
+
+  function displayPath() {
+    if (currentPath === '/home/guest') return '~';
+    if (currentPath.startsWith('/home/guest/')) return '~/' + currentPath.slice(12);
+    return currentPath;
+  }
+  function getPromptHTML() {
+    return '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">'
+      + displayPath() + '</span>$ </span>';
+  }
+
+  // ── cd resolution ────────────────────────────────────────────────────────────
+  const CD_PATHS = new Set([
+    '/', '/home', '/home/guest',
+    '/home/guest/.ssh', '/home/guest/projects', '/home/guest/scripts',
+    '/home/guest/projects/ot-monitor', '/home/guest/projects/tactical-comms',
+    '/home/guest/projects/threat-research',
+    '/opt', '/opt/monitoring', '/var', '/var/log', '/etc', '/tmp',
+  ]);
+
+  function resolveCd(arg) {
+    let t;
+    if (!arg || arg === '~') { t = '/home/guest'; }
+    else if (arg === '..') {
+      const p = currentPath.split('/').filter(Boolean); p.pop();
+      t = p.length ? '/' + p.join('/') : '/';
+    } else if (arg === '-') { t = currentPath; }
+    else if (arg.startsWith('/'))  { t = arg; }
+    else if (arg.startsWith('~/')) { t = '/home/guest/' + arg.slice(2); }
+    else { t = currentPath.replace(/\/$/, '') + '/' + arg; }
+    t = t.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1') || '/';
+    if (t === '/root') return { err: 'Permission denied' };
+    if (CD_PATHS.has(t)) return { ok: t };
+    return { err: 'No such file or directory' };
+  }
+
+  // ── Directory listings ───────────────────────────────────────────────────────
+  function lsPath(path, flags) {
+    const a = flags.includes('a'), l = flags.includes('l');
+    switch (path) {
+      case '/home/guest':
+        if (a) return `total 52
+drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 .
+drwxr-xr-x 3 root  root  4096 Mar 15 09:22 ..
+-rw------- 1 guest guest  847 Jun 21 13:41 .bash_history
+-rw-r--r-- 1 guest guest  220 Mar 15 09:22 .bash_logout
+-rw-r--r-- 1 guest guest 3526 Mar 15 09:22 .bashrc
+-rw-r--r-- 1 guest guest  807 Mar 15 09:22 .profile
+drwx------ 2 guest guest 4096 Mar 15 09:45 .ssh
+drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+-rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
+drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
+        if (l) return `total 20
+drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+-rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
+drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
+        return 'notes.txt  projects  scripts';
+      case '/home/guest/.ssh':
+        if (l || a) return `total 24
+drwx------ 2 guest guest 4096 Mar 15 09:45 .
+drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 ..
+-rw-r--r-- 1 guest guest  403 Mar 15 09:45 authorized_keys
+-rw------- 1 guest guest 2602 Mar 15 09:45 id_rsa
+-rw-r--r-- 1 guest guest  572 Mar 15 09:45 id_rsa.pub
+-rw-r--r-- 1 guest guest  444 Jun 19 08:23 known_hosts`;
+        return 'authorized_keys  id_rsa  id_rsa.pub  known_hosts';
+      case '/home/guest/projects': return 'ot-monitor  tactical-comms  threat-research';
+      case '/home/guest/scripts':  return 'backup.sh  deploy.sh  monitor.sh';
+      case '/opt':
+        if (l || a) return `total 16
+drwxr-xr-x  3 root root 4096 Mar 15 09:22 .
+drwxr-xr-x 20 root root 4096 Mar 15 09:22 ..
+drwxr-xrwx  2 root root 4096 Jun 10 14:33 monitoring`;
+        return 'monitoring';
+      case '/opt/monitoring':
+        if (l || a) return `total 16
+drwxr-xrwx 2 root root 4096 Jun 10 14:33 .
+drwxr-xr-x 3 root root 4096 Mar 15 09:22 ..
+-rwxr-xrwx 1 root root  312 Jun 10 14:33 health-check.sh`;
+        return 'health-check.sh';
+      case '/home':    return 'guest';
+      case '/var/log': return 'auth.log  backup.log  dpkg.log  faillog  health.log  kern.log  lastlog  monitor.log  nginx  syslog  wtmp';
+      case '/etc':     return 'adduser.conf  bash.bashrc  cron.d  cron.daily  crontab  environment  fstab  group  hostname  hosts  issue  motd  nginx  os-release  passwd  profile  resolv.conf  shadow  shells  ssh  sudoers  timezone';
+      case '/':        return 'bin  boot  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var';
+      case '/var':     return 'backups  cache  lib  log  mail  opt  run  spool  tmp';
+      case '/tmp':     return '';
+      default:         return null;
+    }
+  }
+
+  // ── Fake file contents for grep ──────────────────────────────────────────────
+  const FAKE_FILES = {
+    '/etc/passwd': [
+      'root:x:0:0:root:/root:/bin/bash',
+      'daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin',
+      'bin:x:2:2:bin:/bin:/usr/sbin/nologin',
+      'www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin',
+      'syslog:x:104:110::/home/syslog:/usr/sbin/nologin',
+      'sshd:x:106:65534::/run/sshd:/usr/sbin/nologin',
+      'mysql:x:112:117:MySQL Server,,,:/nonexistent:/bin/false',
+      'guest:x:1000:1000:Guest User,,,:/home/guest:/bin/bash',
+    ],
+    '/etc/group': [
+      'root:x:0:', 'daemon:x:1:', 'adm:x:4:syslog,guest',
+      'cdrom:x:24:guest', 'sudo:x:27:guest', 'dip:x:30:guest',
+      'plugdev:x:46:guest', 'lxd:x:116:guest', 'guest:x:1000:',
+    ],
+    '/etc/hosts': [
+      '127.0.0.1       localhost', '127.0.1.1       nfranklin',
+      '10.0.0.1        gateway.internal', '10.0.0.20       ot-controller.internal',
+      '10.0.0.35       scada-primary.internal', '10.0.0.36       scada-backup.internal',
+      '10.0.0.47       nfranklin.internal', '::1             localhost ip6-localhost ip6-loopback',
+    ],
+  };
+
+  // ── grep engine ──────────────────────────────────────────────────────────────
+  function fakeGrep(cmd) {
+    const m = cmd.match(/^grep\s+(-[a-zA-Z]+\s+)?['"]?([^'"]+?)['"]?\s+(\S+)\s*$/);
+    if (!m) return '';
+    const flags = m[1] || '', pattern = m[2], target = m[3];
+    const recursive = /r/i.test(flags), nocase = /i/.test(flags);
+
+    if (recursive) {
+      const p = pattern.toLowerCase();
+      if (/pass|cred|secret|token/.test(p))
+        return `scripts/backup.sh:DB_PASS="Bkp@sc4da2023!"
+scripts/backup.sh:DB_USER="backup_svc"
+scripts/backup.sh:# Automated backup - DO NOT SHARE`;
+      if (/user|admin|login/.test(p))
+        return `/etc/passwd:root:x:0:0:root:/root:/bin/bash
+/etc/passwd:guest:x:1000:1000:Guest User,,,:/home/guest:/bin/bash`;
+      return '';
+    }
+
+    const key = target.replace(/^~\//, '/home/guest/');
+    const lines = FAKE_FILES[key];
+    if (!lines) return '';
+    try {
+      const re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), nocase ? 'i' : '');
+      return lines.filter(l => re.test(l)).join('\n');
+    } catch { return ''; }
+  }
+
+  // ── Animation script ─────────────────────────────────────────────────────────
+  const PROMPT = '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">~</span>$ </span>';
 
   const steps = [
     {
@@ -402,73 +549,27 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 User guest may run the following commands on nfranklin:
     (ALL : ALL) ALL`;
 
-    // ── ls ──
-    if (/^ls(\s+-[a-zA-Z]+)?(\s+~?\/?)?$/.test(c)) {
-      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
-      if (flags.includes('a'))
-        return `total 52
-drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 .
-drwxr-xr-x 3 root  root  4096 Mar 15 09:22 ..
--rw------- 1 guest guest  847 Jun 21 13:41 .bash_history
--rw-r--r-- 1 guest guest  220 Mar 15 09:22 .bash_logout
--rw-r--r-- 1 guest guest 3526 Mar 15 09:22 .bashrc
--rw-r--r-- 1 guest guest  807 Mar 15 09:22 .profile
-drwx------ 2 guest guest 4096 Mar 15 09:45 .ssh
-drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
--rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
-drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
-      if (flags.includes('l'))
-        return `total 20
-drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
--rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
-drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
-      return 'notes.txt  projects  scripts';
+    // ── ls (all variants unified through lsPath) ──
+    if (/^ls(\b|$)/.test(c)) {
+      const m = c.match(/^ls(?:\s+(-[a-zA-Z]+))?(?:\s+(.+))?$/);
+      const flags = m?.[1]?.slice(1) || '';
+      const raw   = m?.[2]?.trim();
+      let target;
+      if (!raw) {
+        target = currentPath;
+      } else if (raw === '~' || raw === '~/') {
+        target = '/home/guest';
+      } else if (raw.startsWith('/')) {
+        target = raw.replace(/\/+$/, '') || '/';
+      } else if (raw.startsWith('~/')) {
+        target = '/home/guest/' + raw.slice(2);
+      } else {
+        target = currentPath.replace(/\/$/, '') + '/' + raw;
+      }
+      target = target.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1') || '/';
+      const out = lsPath(target, flags);
+      return out !== null ? out : null;
     }
-
-    if (/^ls(\s+-[a-zA-Z]+)?\s+~?\/?(\.ssh)\/?$/.test(c)) {
-      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
-      if (flags.includes('l') || flags.includes('a'))
-        return `total 24
-drwx------ 2 guest guest 4096 Mar 15 09:45 .
-drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 ..
--rw-r--r-- 1 guest guest  403 Mar 15 09:45 authorized_keys
--rw------- 1 guest guest 2602 Mar 15 09:45 id_rsa
--rw-r--r-- 1 guest guest  572 Mar 15 09:45 id_rsa.pub
--rw-r--r-- 1 guest guest  444 Jun 19 08:23 known_hosts`;
-      return 'authorized_keys  id_rsa  id_rsa.pub  known_hosts';
-    }
-
-    if (/^ls(\s+-[a-zA-Z]+)?\s+~?\/?scripts\/?$/.test(c))
-      return 'backup.sh  deploy.sh  monitor.sh';
-    if (/^ls(\s+-[a-zA-Z]+)?\s+~?\/?projects\/?$/.test(c))
-      return 'ot-monitor  tactical-comms  threat-research';
-    if (/^ls(\s+-[a-zA-Z]+)?\s+\/home\/?$/.test(c))
-      return 'guest';
-
-    if (/^ls(\s+-[a-zA-Z]+)?\s+\/opt\/monitoring\/?$/.test(c)) {
-      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
-      if (flags.includes('l') || flags.includes('a'))
-        return `total 16
-drwxr-xrwx 2 root root 4096 Jun 10 14:33 .
-drwxr-xr-x 3 root root 4096 Mar 15 09:22 ..
--rwxr-xrwx 1 root root  312 Jun 10 14:33 health-check.sh`;
-      return 'health-check.sh';
-    }
-
-    if (/^ls(\s+-[a-zA-Z]+)?\s+\/opt\/?$/.test(c)) {
-      const flags = (c.match(/-([a-zA-Z]+)/) || ['', ''])[1];
-      if (flags.includes('l') || flags.includes('a'))
-        return `total 16
-drwxr-xr-x  3 root root 4096 Mar 15 09:22 .
-drwxr-xr-x 20 root root 4096 Mar 15 09:22 ..
-drwxr-xrwx  2 root root 4096 Jun 10 14:33 monitoring`;
-      return 'monitoring';
-    }
-
-    if (/^ls(\s+-[a-zA-Z]+)?\s+\/var\/log\/?$/.test(c))
-      return 'auth.log  backup.log  dpkg.log  faillog  health.log  kern.log  lastlog  monitor.log  nginx  syslog  wtmp';
-    if (/^ls(\s+-[a-zA-Z]+)?\s+\/etc\/?$/.test(c))
-      return 'adduser.conf  bash.bashrc  cron.d  cron.daily  crontab  environment  fstab  group  hostname  hosts  issue  motd  nginx  os-release  passwd  profile  resolv.conf  shadow  shells  ssh  sudoers  timezone';
 
     // ── cat ──
     if (/^cat\s+(~\/)?notes\.txt$/.test(c))
@@ -492,25 +593,9 @@ cat /opt/monitoring/health-check.sh
 crontab -l
 history -c`;
 
-    if (c === 'cat /etc/passwd')
-      return `root:x:0:0:root:/root:/bin/bash
-daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
-bin:x:2:2:bin:/bin:/usr/sbin/nologin
-www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
-syslog:x:104:110::/home/syslog:/usr/sbin/nologin
-sshd:x:106:65534::/run/sshd:/usr/sbin/nologin
-mysql:x:112:117:MySQL Server,,,:/nonexistent:/bin/false
-guest:x:1000:1000:Guest User,,,:/home/guest:/bin/bash`;
-
-    if (c === 'cat /etc/hosts')
-      return `127.0.0.1       localhost
-127.0.1.1       nfranklin
-10.0.0.1        gateway.internal
-10.0.0.20       ot-controller.internal
-10.0.0.35       scada-primary.internal
-10.0.0.36       scada-backup.internal
-10.0.0.47       nfranklin.internal
-::1             localhost ip6-localhost ip6-loopback`;
+    if (c === 'cat /etc/passwd')  return FAKE_FILES['/etc/passwd'].join('\n');
+    if (c === 'cat /etc/group')   return FAKE_FILES['/etc/group'].join('\n');
+    if (c === 'cat /etc/hosts')   return FAKE_FILES['/etc/hosts'].join('\n');
 
     if (c === 'cat /etc/hostname') return 'nfranklin';
 
@@ -596,6 +681,9 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
 /bin/mount
 /bin/su`;
 
+    // ── grep ──
+    if (/^grep\b/.test(c)) return fakeGrep(c);
+
     return null; // not handled — fall through to escalation or "command not found"
   }
 
@@ -610,7 +698,7 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
       input = '';
       currentLine = document.createElement('div');
       currentLine.className = 'line';
-      currentLine.innerHTML = rootMode ? ROOT_PROMPT : PROMPT;
+      currentLine.innerHTML = rootMode ? ROOT_PROMPT : getPromptHTML();
       currentText = document.createElement('span');
       const cur = document.createElement('span');
       cur.className = 'cursor';
@@ -634,6 +722,24 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
             rootMode = false;
           } else if (cmd) {
             appendHTML('<div class="line out">Hey, I appreciate your effort. Shoot me an email at <a href="mailto:nicholascfranklin@gmail.com">nicholascfranklin@gmail.com</a>, or find me on <a href="https://www.linkedin.com/in/nicholas-franklin-bab45375/" target="_blank" rel="noopener">LinkedIn</a>. Let\'s talk.</div>');
+          }
+          newPromptLine();
+          return;
+        }
+
+        if (cmd === 'clear') {
+          while (body.firstChild) body.removeChild(body.firstChild);
+          newPromptLine();
+          return;
+        }
+
+        if (/^cd(\s|$)/.test(cmd)) {
+          const arg = cmd.slice(2).trim();
+          const r = resolveCd(arg);
+          if (r.ok !== undefined) {
+            currentPath = r.ok;
+          } else {
+            appendHTML(`<div class="line dimtext">bash: cd: ${escapeHTML(arg || '~')}: ${r.err}</div>`);
           }
           newPromptLine();
           return;
