@@ -220,6 +220,51 @@
 
   const ROOT_PROMPT = '<span class="prompt"><span class="user" style="color:#ff5f56">root</span>@nfranklin:<span class="path">/root</span># </span>';
 
+  // Patterns that look like privilege escalation attempts
+  const ESCALATION = [
+    /\bsudo\b/,                                     // anything sudo
+    /^su(\s|$|-)/,                                  // su, su -, su root
+    /\/bin\/(ba|da|z|c|tc|k)?sh\b/,                // direct shell paths
+    /^(ba|z|da|c|k)?sh(\s+-[ip]|\s*$)/,            // bare shell commands
+    /\bpkexec\b/,                                   // polkit
+    /find.+(-perm.+[u+]s|-suid|-perm\s+[0-9]*[47][0-9]{3})/i,  // SUID search
+    /cat\s+\/etc\/shadow/,                          // shadow file
+    /\/etc\/sudoers/,                               // sudoers
+    /\b(linpeas|linenum|pspy|lse\.sh|les\.sh)\b/i, // privesc scripts
+    /chmod\s+(u\+s|[0-9]*[47][0-9]{3})/,           // setuid chmod
+    /chown\s+root/,                                 // chown root
+    /\b(dirtycow|dirty_cow|rogue_potato|juicy_potato|printspoofer|noprivesc|overlayfs)\b/i,
+    /os\.(setuid|seteuid)\s*\(\s*0\s*\)/,          // python setuid(0)
+    /pty\.spawn\s*\(\s*['"]\/bin/,                  // python pty shell
+    /docker\s+run.*(--privileged|-v\s+\/[^:]*:\/[^:]*)/,  // docker escape
+    /\blxc\b.*(exec|start)/,                        // lxc escape
+    /\bnc(at)?\b.+-e.+sh/i,                        // netcat shell
+    /\bsocat\b.*exec/i,                             // socat shell
+    /\bbash\s+-i\b/,                               // bash -i
+    /\bmsfconsole\b|\bmsfvenom\b/i,                // metasploit
+    /exploit\/.*\/local\//i,                        // msf local exploit path
+    /\bcve-20[0-9]{2}-[0-9]+/i,                    // CVE reference
+    /uname\s+-[a-z]*a/,                             // kernel version check
+    /\bid\b\s*$/,                                   // id command alone
+    /cat\s+\/proc\/(version|cpuinfo)/,              // kernel info
+    /\benv\b.*sh\b/,                               // env shell escape
+    /\bawk\b.*system\s*\(/,                        // awk shell escape
+    /\bperl\b.*exec\s*\(/,                         // perl shell escape
+    /\bruby\b.*exec\b/,                            // ruby shell escape
+    /\bvim?\b.*-c.*!.*sh/,                        // vim shell escape
+    /\bpython[23]?\b.*import\s+os/,               // python os module
+  ];
+
+  function isEscalation(cmd) {
+    return ESCALATION.some(p => p.test(cmd));
+  }
+
+  function escalationPrelude(cmd) {
+    if (/\bsudo\b/.test(cmd)) return '[sudo] password for guest: ';
+    if (/^su(\s|$|-)/.test(cmd))   return 'Password: ';
+    return null; // silent — exploit path, no password prompt
+  }
+
   function enableInteractive() {
     let input = '';
     let rootMode = false;
@@ -269,14 +314,16 @@
           return;
         }
 
-        if (cmd === 'sudo su') {
+        if (isEscalation(cmd)) {
           locked = true;
-          appendHTML('<div class="line dimtext">[sudo] password for guest: </div>');
+          const prelude = escalationPrelude(cmd);
+          const delay = prelude ? 900 : 300;
+          if (prelude) appendHTML(`<div class="line dimtext">${prelude}</div>`);
           setTimeout(() => {
             rootMode = true;
             locked = false;
             newPromptLine();
-          }, 900);
+          }, delay);
           return;
         }
 
