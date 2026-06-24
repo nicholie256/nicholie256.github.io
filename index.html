@@ -138,6 +138,7 @@
 <script>
 (function () {
   const body = document.getElementById('term-body');
+  const titlebarLabel = document.querySelector('.titlebar-label');
 
   const ROOT_PROMPT = '<span class="prompt"><span class="user" style="color:#ff5f56">root</span>@nfranklin:<span class="path">/root</span># </span>';
 
@@ -152,6 +153,12 @@
   function getPromptHTML() {
     return '<span class="prompt"><span class="user">guest@nfranklin</span>:<span class="path">'
       + displayPath() + '</span>$ </span>';
+  }
+
+  function updateTitlebar(isRoot) {
+    titlebarLabel.textContent = isRoot
+      ? 'root@nfranklin: /root'
+      : 'guest@nfranklin: ' + displayPath();
   }
 
   // ── cd resolution ────────────────────────────────────────────────────────────
@@ -257,6 +264,152 @@ drwxr-xr-x 3 root root 4096 Mar 15 09:22 ..
       '10.0.0.47       nfranklin.internal', '::1             localhost ip6-localhost ip6-loopback',
     ],
   };
+
+  // ── File contents (resolved by resolvePath for cat / head / tail) ───────────
+  const FILE_CONTENTS = {
+    '/home/guest/notes.txt':
+`TODO list - nfranklin
+=====================
+[x] Deploy updated monitoring agent to ot-controller
+[ ] Rotate SSH keys  <-- overdue, same keys since March
+[ ] Fix backup.sh permissions - currently world-readable by mistake
+[ ] Review access logs on scada-primary (suspicious logins Jun 17)
+[ ] Restrict port 22 to internal network only
+[ ] Follow up with IT on sudo timeout config`,
+
+    '/home/guest/.bash_history':
+`ssh -i .ssh/id_rsa deploy@10.0.0.20
+mysql -h 10.0.0.35 -u admin -p
+sudo systemctl status nginx
+grep -r "password" /var/log/ 2>/dev/null
+cat scripts/backup.sh
+ls -la /opt/monitoring
+cat /opt/monitoring/health-check.sh
+crontab -l
+history -c`,
+
+    '/home/guest/.bashrc':
+`# ~/.bashrc: executed by bash(1) for non-login shells.
+export HISTSIZE=1000
+export HISTFILESIZE=2000
+export EDITOR=vim
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'`,
+
+    '/home/guest/scripts/backup.sh':
+`#!/bin/bash
+# Automated backup - DO NOT SHARE
+
+BACKUP_DIR="/var/backups/nfranklin"
+DB_HOST="10.0.0.35"
+DB_USER="backup_svc"
+DB_PASS="Bkp@sc4da2023!"
+DB_NAME="scada_config"
+
+mysqldump -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME > $BACKUP_DIR/scada_$(date +%Y%m%d).sql
+tar czf $BACKUP_DIR/home_$(date +%Y%m%d).tar.gz /home/guest/projects/
+echo "Backup complete: $(date)" >> /var/log/backup.log`,
+
+    '/home/guest/scripts/monitor.sh':
+`#!/bin/bash
+# Runs every 5 min via crontab
+ping -c1 10.0.0.20 &>/dev/null || echo "$(date): ot-controller unreachable" | mail -s "ALERT" nfranklin@leidos.com
+ping -c1 10.0.0.35 &>/dev/null || echo "$(date): scada-primary unreachable"  | mail -s "ALERT" nfranklin@leidos.com`,
+
+    '/home/guest/scripts/deploy.sh':
+`#!/bin/bash
+rsync -avz --delete projects/ot-monitor/ deploy@10.0.0.20:/opt/ot-monitor/
+ssh deploy@10.0.0.20 "sudo systemctl restart ot-monitor"
+echo "Deployment complete: $(date)"`,
+
+    '/home/guest/.ssh/id_rsa':
+`-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAAbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNsGkao7
+xK2P4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPqWmYdXjE8nLsZwKbH1oRiMvVpQ2
+Cs7dA3pNfBqTkH8AAAAEbmlsAAAAAAAAAB8AAAAHc3NoLXJzYQAAAQEA2gbO3wkz
+[... 47 lines redacted ...]
+-----END OPENSSH PRIVATE KEY-----`,
+
+    '/home/guest/.ssh/id_rsa.pub':
+      'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC2Bs7fCTNK4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPq guest@nfranklin',
+
+    '/home/guest/.ssh/authorized_keys':
+      'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC2Bs7fCTNK4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPq guest@nfranklin',
+
+    '/opt/monitoring/health-check.sh':
+`#!/bin/bash
+# System health check - runs as root every 5 minutes via /etc/crontab
+LOGFILE="/var/log/health.log"
+TS=$(date '+%Y-%m-%d %H:%M:%S')
+
+systemctl is-active --quiet sshd  && echo "[$TS] sshd: OK"  >> $LOGFILE
+systemctl is-active --quiet nginx && echo "[$TS] nginx: OK" >> $LOGFILE
+ping -c1 10.0.0.20 &>/dev/null   && echo "[$TS] ot-controller: reachable" >> $LOGFILE \\
+                                  || echo "[$TS] ot-controller: UNREACHABLE" >> $LOGFILE`,
+
+    '/var/log/auth.log':
+`Jun 21 13:40:11 nfranklin sshd[9823]: Accepted publickey for guest from 203.0.113.14 port 49832 ssh2: RSA SHA256:kHgL2pXvBnMq
+Jun 21 13:40:11 nfranklin sshd[9823]: pam_unix(sshd:session): session opened for user guest by (uid=0)
+Jun 21 13:35:44 nfranklin sudo[9712]: guest : TTY=pts/1 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/systemctl restart nginx
+Jun 21 09:15:03 nfranklin sshd[4521]: Accepted password for nfranklin from 10.0.0.1 port 54301 ssh2
+Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 port 51234 ssh2`,
+
+    '/etc/crontab':
+`# /etc/crontab: system-wide crontab
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# m h dom mon dow user    command
+17 *  * * *  root  cd / && run-parts --report /etc/cron.hourly
+25 6  * * *  root  test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily
+*/5 * * * *  root  /opt/monitoring/health-check.sh`,
+
+    '/etc/hostname': 'nfranklin',
+
+    '/etc/os-release':
+`PRETTY_NAME="Ubuntu 22.04.3 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04.3 LTS (Jammy Jellyfish)"
+ID=ubuntu
+ID_LIKE=debian
+UBUNTU_CODENAME=jammy`,
+
+    '/etc/issue': 'Ubuntu 22.04.3 LTS \\n \\l',
+  };
+
+  function resolvePath(arg) {
+    if (!arg) return null;
+    let p;
+    if (arg.startsWith('/'))       { p = arg; }
+    else if (arg === '~')          { return '/home/guest'; }
+    else if (arg.startsWith('~/')) { p = '/home/guest/' + arg.slice(2); }
+    else                           { p = currentPath.replace(/\/$/, '') + '/' + arg; }
+    return p.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+  }
+
+  // ── Pipe handler: left-side | grep pattern ───────────────────────────────────
+  function handlePipe(cmd) {
+    const clean = cmd.replace(/\s+2?>>?\s*\S+/g, '').trim();
+    const pipeIdx = clean.indexOf('|');
+    if (pipeIdx < 0) return null;
+    const leftCmd  = clean.slice(0, pipeIdx).trim();
+    const rightCmd = clean.slice(pipeIdx + 1).trim();
+    if (!/^grep\b/.test(rightCmd)) return null;
+
+    const leftOut = fakeCmdResponse(leftCmd);
+    if (leftOut === null || leftOut === '') return leftOut;
+
+    const gm = rightCmd.match(/^grep\s+(-[a-zA-Z]+\s+)?['"]?([^'"]+?)['"]?\s*$/);
+    if (!gm) return null;
+    const nocase = /i/.test(gm[1] || '');
+    try {
+      const re = new RegExp(
+        gm[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), nocase ? 'i' : '');
+      return leftOut.split('\n').filter(l => re.test(l)).join('\n');
+    } catch { return ''; }
+  }
 
   // ── grep engine ──────────────────────────────────────────────────────────────
   function fakeGrep(cmd) {
@@ -415,7 +568,7 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
     const c = cmd.trim().replace(/\s+/g, ' ');
 
     // ── Basic info ──
-    if (c === 'pwd') return '/home/guest';
+    if (c === 'pwd') return currentPath;
     if (/^hostname/.test(c)) return 'nfranklin';
     if (c === 'whoami') return 'guest';
 
@@ -530,16 +683,6 @@ Swap:          2.0Gi          0B       2.0Gi`;
 0   2 * * * /home/guest/scripts/backup.sh
 @reboot python3 /home/guest/projects/ot-monitor/monitor.py --daemon`;
 
-    if (c === 'cat /etc/crontab')
-      return `# /etc/crontab: system-wide crontab
-SHELL=/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
-# m h dom mon dow user    command
-17 *  * * *  root  cd / && run-parts --report /etc/cron.hourly
-25 6  * * *  root  test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily
-*/5 * * * *  root  /opt/monitoring/health-check.sh`;
-
     // ── Sudo permissions (intercepted before escalation check) ──
     if (/^sudo\s+-l/.test(c))
       return `Matching Defaults entries for guest on nfranklin:
@@ -568,103 +711,63 @@ User guest may run the following commands on nfranklin:
       }
       target = target.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1') || '/';
       const out = lsPath(target, flags);
-      return out !== null ? out : null;
+      if (out !== null) return out;
+      return `ls: cannot access '${raw || currentPath}': No such file or directory`;
     }
 
-    // ── cat ──
-    if (/^cat\s+(~\/)?notes\.txt$/.test(c))
-      return `TODO list - nfranklin
-=====================
-[x] Deploy updated monitoring agent to ot-controller
-[ ] Rotate SSH keys  <-- overdue, same keys since March
-[ ] Fix backup.sh permissions - currently world-readable by mistake
-[ ] Review access logs on scada-primary (suspicious logins Jun 17)
-[ ] Restrict port 22 to internal network only
-[ ] Follow up with IT on sudo timeout config`;
+    // ── echo ──
+    if (/^echo\b/.test(c)) {
+      const arg = c.slice(4).trim().replace(/^["'](.*)["']$/, '$1');
+      return arg
+        .replace(/\$USER/g, 'guest').replace(/\$HOME/g, '/home/guest')
+        .replace(/\$PWD/g, currentPath).replace(/\$SHELL/g, '/bin/bash')
+        .replace(/\$HOSTNAME/g, 'nfranklin').replace(/\$\?/g, '0')
+        .replace(/\$\$/g, '9823')
+        .replace(/\$PATH/g, '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin');
+    }
 
-    if (/^cat\s+(~\/)?\.bash_history$/.test(c))
-      return `ssh -i .ssh/id_rsa deploy@10.0.0.20
-mysql -h 10.0.0.35 -u admin -p
-sudo systemctl status nginx
-grep -r "password" /var/log/ 2>/dev/null
-cat scripts/backup.sh
-ls -la /opt/monitoring
-cat /opt/monitoring/health-check.sh
-crontab -l
-history -c`;
+    // ── file ──
+    if (/^file\s+/.test(c)) {
+      const arg = c.slice(5).trim();
+      const r = resolvePath(arg);
+      if (r) {
+        if (FAKE_FILES[r])              return `${arg}: ASCII text`;
+        if (FILE_CONTENTS[r] !== undefined) {
+          if (/\.sh$/.test(r))          return `${arg}: Bourne-Again shell script, ASCII text executable`;
+          if (/id_rsa$/.test(r) && !r.endsWith('.pub')) return `${arg}: PEM RSA private key`;
+          if (/\.pub$|authorized_keys$/.test(r)) return `${arg}: OpenSSH RSA public key`;
+          return `${arg}: ASCII text`;
+        }
+      }
+      return `${arg}: cannot open '${arg}' (No such file or directory)`;
+    }
 
-    if (c === 'cat /etc/passwd')  return FAKE_FILES['/etc/passwd'].join('\n');
-    if (c === 'cat /etc/group')   return FAKE_FILES['/etc/group'].join('\n');
-    if (c === 'cat /etc/hosts')   return FAKE_FILES['/etc/hosts'].join('\n');
+    // ── silent-success commands ──
+    if (/^(chmod|touch|mkdir|ln)\b/.test(c)) return '';
 
-    if (c === 'cat /etc/hostname') return 'nfranklin';
+    // ── ssh / scp / sftp ──
+    if (/^(ssh|scp|sftp)\b/.test(c)) {
+      const host = (c.match(/(?:@|host\s+)(\S+)/) || [])[1] || 'host';
+      if (/10\.0\.0\.[0-9]+|\.internal/.test(c))
+        return `ssh: connect to host ${host}: Connection timed out`;
+      return `ssh: connect to host ${host}: Connection refused`;
+    }
 
-    if (/^cat \/etc\/(os-release|issue)$/.test(c))
-      return `PRETTY_NAME="Ubuntu 22.04.3 LTS"
-NAME="Ubuntu"
-VERSION_ID="22.04"
-VERSION="22.04.3 LTS (Jammy Jellyfish)"
-ID=ubuntu
-ID_LIKE=debian
-UBUNTU_CODENAME=jammy`;
-
-    if (/^cat\s+(~\/)?scripts\/backup\.sh$/.test(c))
-      return `#!/bin/bash
-# Automated backup - DO NOT SHARE
-
-BACKUP_DIR="/var/backups/nfranklin"
-DB_HOST="10.0.0.35"
-DB_USER="backup_svc"
-DB_PASS="Bkp@sc4da2023!"
-DB_NAME="scada_config"
-
-mysqldump -h $DB_HOST -u $DB_USER -p$DB_PASS $DB_NAME > $BACKUP_DIR/scada_$(date +%Y%m%d).sql
-tar czf $BACKUP_DIR/home_$(date +%Y%m%d).tar.gz /home/guest/projects/
-echo "Backup complete: $(date)" >> /var/log/backup.log`;
-
-    if (/^cat\s+(~\/)?scripts\/monitor\.sh$/.test(c))
-      return `#!/bin/bash
-# Runs every 5 min via crontab
-ping -c1 10.0.0.20 &>/dev/null || echo "$(date): ot-controller unreachable" | mail -s "ALERT" nfranklin@leidos.com
-ping -c1 10.0.0.35 &>/dev/null || echo "$(date): scada-primary unreachable"  | mail -s "ALERT" nfranklin@leidos.com`;
-
-    if (/^cat\s+(~\/)?scripts\/deploy\.sh$/.test(c))
-      return `#!/bin/bash
-rsync -avz --delete projects/ot-monitor/ deploy@10.0.0.20:/opt/ot-monitor/
-ssh deploy@10.0.0.20 "sudo systemctl restart ot-monitor"
-echo "Deployment complete: $(date)"`;
-
-    if (c === 'cat /opt/monitoring/health-check.sh')
-      return `#!/bin/bash
-# System health check - runs as root every 5 minutes via /etc/crontab
-LOGFILE="/var/log/health.log"
-TS=$(date '+%Y-%m-%d %H:%M:%S')
-
-systemctl is-active --quiet sshd  && echo "[$TS] sshd: OK"  >> $LOGFILE
-systemctl is-active --quiet nginx && echo "[$TS] nginx: OK" >> $LOGFILE
-ping -c1 10.0.0.20 &>/dev/null   && echo "[$TS] ot-controller: reachable" >> $LOGFILE \
-                                  || echo "[$TS] ot-controller: UNREACHABLE" >> $LOGFILE`;
-
-    if (/^cat\s+(~\/)?\.ssh\/id_rsa$/.test(c))
-      return `-----BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAAbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBNsGkao7
-xK2P4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPqWmYdXjE8nLsZwKbH1oRiMvVpQ2
-Cs7dA3pNfBqTkH8AAAAEbmlsAAAAAAAAAB8AAAAHc3NoLXJzYQAAAQEA2gbO3wkz
-[... 47 lines redacted ...]
------END OPENSSH PRIVATE KEY-----`;
-
-    if (/^cat\s+(~\/)?\.ssh\/id_rsa\.pub$/.test(c))
-      return 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC2Bs7fCTNK4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPq guest@nfranklin';
-
-    if (/^cat\s+(~\/)?\.ssh\/authorized_keys$/.test(c))
-      return 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC2Bs7fCTNK4mFxQvLjA9nNUVpAzR2lQ7FvS6tK3cPq guest@nfranklin';
-
-    if (/^(cat|tail).*\/var\/log\/auth\.log/.test(c))
-      return `Jun 21 13:40:11 nfranklin sshd[9823]: Accepted publickey for guest from 203.0.113.14 port 49832 ssh2: RSA SHA256:kHgL2pXvBnMq
-Jun 21 13:40:11 nfranklin sshd[9823]: pam_unix(sshd:session): session opened for user guest by (uid=0)
-Jun 21 13:35:44 nfranklin sudo[9712]: guest : TTY=pts/1 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/systemctl restart nginx
-Jun 21 09:15:03 nfranklin sshd[4521]: Accepted password for nfranklin from 10.0.0.1 port 54301 ssh2
-Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 port 51234 ssh2`;
+    // ── cat / head / tail ── (unified, supports relative paths)
+    if (/^(cat|head|tail)\b/.test(c)) {
+      const fileArg = c
+        .replace(/^(cat|head|tail)/, '')
+        .replace(/\s+-[a-zA-Z]\s+\d+/g, '')   // strip -n 10, -c 100
+        .replace(/\s+-\S+/g, '')               // strip -f, -v, etc.
+        .trim();
+      if (!fileArg) return '';
+      const r = resolvePath(fileArg);
+      if (r) {
+        if (FAKE_FILES[r])              return FAKE_FILES[r].join('\n');
+        if (FILE_CONTENTS[r] !== undefined) return FILE_CONTENTS[r];
+      }
+      return null; // fall through to escalation check (/etc/shadow, /proc/*)
+    }
 
     // ── find SUID binaries - show tempting list instead of triggering root ──
     if (/^find\b.*-perm\b/.test(c))
@@ -693,6 +796,9 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
     let rootMode = false;
     let locked = false;
     let currentLine, currentText;
+    const cmdHistory = [];
+    let histIdx = -1;
+    let savedInput = '';
 
     function newPromptLine() {
       input = '';
@@ -715,11 +821,13 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
 
       if (e.key === 'Enter') {
         const cmd = input.trim();
+        if (cmd) { cmdHistory.push(cmd); histIdx = -1; savedInput = ''; }
         currentLine.querySelector('.cursor')?.remove();
 
         if (rootMode) {
           if (cmd === 'exit') {
             rootMode = false;
+            updateTitlebar(false);
           } else if (cmd) {
             appendHTML('<div class="line out">Hey, I appreciate your effort. Shoot me an email at <a href="mailto:nicholascfranklin@gmail.com">nicholascfranklin@gmail.com</a>, or find me on <a href="https://www.linkedin.com/in/nicholas-franklin-bab45375/" target="_blank" rel="noopener">LinkedIn</a>. Let\'s talk.</div>');
           }
@@ -738,6 +846,7 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
           const r = resolveCd(arg);
           if (r.ok !== undefined) {
             currentPath = r.ok;
+            updateTitlebar(false);
           } else {
             appendHTML(`<div class="line dimtext">bash: cd: ${escapeHTML(arg || '~')}: ${r.err}</div>`);
           }
@@ -755,6 +864,16 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
           return;
         }
 
+        // Pipe commands (e.g. ps aux | grep root)
+        if (cmd.includes('|')) {
+          const pipeOut = handlePipe(cmd);
+          if (pipeOut !== null) {
+            if (pipeOut) appendHTML(`<div class="line out">${escapeHTML(pipeOut)}</div>`);
+            newPromptLine();
+            return;
+          }
+        }
+
         // Fake command responses run before escalation check
         const fakeOut = fakeCmdResponse(cmd);
         if (fakeOut !== null) {
@@ -768,12 +887,42 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
           const prelude = escalationPrelude(cmd);
           const delay = prelude ? 900 : 300;
           if (prelude) appendHTML(`<div class="line dimtext">${prelude}</div>`);
-          setTimeout(() => { rootMode = true; locked = false; newPromptLine(); }, delay);
+          setTimeout(() => {
+            rootMode = true;
+            updateTitlebar(true);
+            locked = false;
+            newPromptLine();
+          }, delay);
           return;
         }
 
-        if (cmd) appendHTML(`<div class="line dimtext">-bash: ${escapeHTML(cmd)}: command not found</div>`);
+        if (cmd) {
+          const msg = /^(cat|head|tail)\s+/.test(cmd)
+            ? `cat: ${escapeHTML(cmd.split(/\s+/).pop())}: No such file or directory`
+            : `-bash: ${escapeHTML(cmd)}: command not found`;
+          appendHTML(`<div class="line dimtext">${msg}</div>`);
+        }
         newPromptLine();
+
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (cmdHistory.length === 0) return;
+        if (histIdx === -1) { savedInput = input; histIdx = cmdHistory.length - 1; }
+        else if (histIdx > 0) { histIdx--; }
+        input = cmdHistory[histIdx];
+        currentText.textContent = input;
+
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (histIdx === -1) return;
+        if (histIdx < cmdHistory.length - 1) {
+          histIdx++;
+          input = cmdHistory[histIdx];
+        } else {
+          histIdx = -1;
+          input = savedInput;
+        }
+        currentText.textContent = input;
 
       } else if (e.key === 'Backspace') {
         e.preventDefault();
@@ -807,6 +956,14 @@ Jun 17 14:05:11 nfranklin sshd[7823]: Accepted publickey for root from 10.0.0.1 
       }
     }
 
+    await sleep(300);
+    const touchOnly = window.matchMedia('(pointer: coarse)').matches
+      && !window.matchMedia('(pointer: fine)').matches;
+    if (touchOnly) {
+      appendHTML('<div class="line dimtext"># note: interactive mode requires a physical keyboard</div>');
+    } else {
+      appendHTML('<div class="line dimtext"># try: ls &nbsp;&nbsp; cat notes.txt &nbsp;&nbsp; id &nbsp;&nbsp; uname -a</div>');
+    }
     enableInteractive();
   }
 
