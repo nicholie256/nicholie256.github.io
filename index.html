@@ -216,8 +216,50 @@ drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 ..
 -rw-r--r-- 1 guest guest  572 Mar 15 09:45 id_rsa.pub
 -rw-r--r-- 1 guest guest  444 Jun 19 08:23 known_hosts`;
         return 'authorized_keys  id_rsa  id_rsa.pub  known_hosts';
-      case '/home/guest/projects': return 'ot-monitor  tactical-comms  threat-research';
+      case '/home/guest/projects':
+        if (l || a) return `total 20
+drwxr-xr-x 5 guest guest 4096 Jun 10 14:33 .
+drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 ..
+drwxr-xr-x 3 guest guest 4096 Apr 03 11:22 ot-monitor
+drwxr-xr-x 3 guest guest 4096 Feb 14 09:10 tactical-comms
+drwxr-xr-x 4 guest guest 4096 May 30 16:48 threat-research`;
+        return 'ot-monitor  tactical-comms  threat-research';
+      case '/home/guest/projects/ot-monitor':
+        if (l || a) return `total 28
+drwxr-xr-x 3 guest guest 4096 Apr 03 11:22 .
+drwxr-xr-x 5 guest guest 4096 Jun 10 14:33 ..
+-rw-r--r-- 1 guest guest 1847 Apr 03 11:22 README.md
+-rwxr-xr-x 1 guest guest 4821 Jun 10 14:27 monitor.py
+-rw-r--r-- 1 guest guest  312 Mar 20 10:14 config.yaml
+-rw-r--r-- 1 guest guest   48 Mar 15 09:30 requirements.txt`;
+        return 'README.md  config.yaml  monitor.py  requirements.txt';
+      case '/home/guest/projects/tactical-comms':
+        if (l || a) return `total 24
+drwxr-xr-x 3 guest guest 4096 Feb 14 09:10 .
+drwxr-xr-x 5 guest guest 4096 Jun 10 14:33 ..
+-rw-r--r-- 1 guest guest 1623 Feb 14 09:10 README.md
+-rwxr-xr-x 1 guest guest 3102 Jan 28 14:55 rf_scanner.py
+-rwxr-xr-x 1 guest guest 1844 Feb 01 11:22 manet_audit.sh
+drwx------ 2 guest guest 4096 Feb 14 09:10 findings`;
+        return 'README.md  findings/  manet_audit.sh  rf_scanner.py';
+      case '/home/guest/projects/threat-research':
+        if (l || a) return `total 28
+drwxr-xr-x 4 guest guest 4096 May 30 16:48 .
+drwxr-xr-x 5 guest guest 4096 Jun 10 14:33 ..
+-rw-r--r-- 1 guest guest 2104 May 30 16:48 README.md
+-rw-r--r-- 1 guest guest 3891 May 22 13:01 ics_ttp_map.md
+drwxr-xr-x 2 guest guest 4096 May 15 09:33 custom_detections
+drwxr-xr-x 2 guest guest 4096 Apr 10 11:17 tools`;
+        return 'README.md  custom_detections/  ics_ttp_map.md  tools/';
       case '/home/guest/scripts':  return 'backup.sh  deploy.sh  monitor.sh';
+      case '/root':
+        if (l || a) return `total 20
+drwx------ 3 root root 4096 Jun 17 14:07 .
+drwxr-xr-x 20 root root 4096 Mar 15 09:22 ..
+-rw-r--r-- 1 root root  183 Jun 17 14:07 flag.txt
+-rw------- 1 root root  291 Jun 17 14:05 notes.txt
+drwx------ 2 root root 4096 Mar 15 09:22 .ssh`;
+        return 'flag.txt  notes.txt  .ssh';
       case '/opt':
         if (l || a) return `total 16
 drwxr-xr-x  3 root root 4096 Mar 15 09:22 .
@@ -377,6 +419,143 @@ ID_LIKE=debian
 UBUNTU_CODENAME=jammy`,
 
     '/etc/issue': 'Ubuntu 22.04.3 LTS \\n \\l',
+
+    '/var/log/health.log':
+`[2024-06-21 13:40:01] sshd: OK
+[2024-06-21 13:40:01] nginx: OK
+[2024-06-21 13:40:01] ot-controller: reachable (latency 2ms)
+[2024-06-21 13:35:01] sshd: OK
+[2024-06-21 13:35:01] nginx: OK
+[2024-06-21 13:35:01] ot-controller: UNREACHABLE
+[2024-06-21 13:30:01] sshd: OK
+[2024-06-21 13:30:01] nginx: OK
+[2024-06-21 13:30:01] ot-controller: UNREACHABLE
+[2024-06-21 13:25:01] sshd: OK
+[2024-06-21 13:25:01] nginx: OK
+[2024-06-21 13:25:01] ot-controller: reachable (latency 4ms)
+[2024-06-17 14:07:44] [WARN]  unexpected process restart — scada-primary.internal
+[2024-06-17 14:07:01] [WARN]  ot-controller response latency 1247ms (threshold: 500ms)
+[2024-06-17 14:06:15] [ALERT] register write — scada-primary.internal addr=0x04A3 val=0xFF (prev: 0x00)
+[2024-06-17 14:06:12] [ALERT] register write — scada-primary.internal addr=0x04A2 val=0xFF (prev: 0x00)
+[2024-06-17 14:05:01] sshd: OK
+[2024-06-17 14:05:01] nginx: OK
+[2024-06-17 14:05:01] ot-controller: reachable (latency 3ms)`,
+
+    '/home/guest/projects/ot-monitor/README.md':
+`# ot-monitor
+
+Lightweight passive monitoring agent for Modbus TCP and DNP3 environments.
+
+## Purpose
+
+Baseline and anomaly detection for ICS/SCADA networks where traditional
+SIEM agents are impractical or contraindicated. Deployed as a read-only
+passive sensor on mirrored OT network segments.
+
+## Capabilities
+
+  - Modbus register read/write baseline profiling
+  - DNP3 unsolicited response anomaly detection
+  - Alert on unauthorized function codes (FC5, FC6, FC15, FC16)
+  - Process value deviation alerts (configurable thresholds per point)
+  - First-seen source writing to a previously read-only register
+  - Response latency monitoring (default threshold: 500ms)
+
+## Deployment
+
+  Target:    passive sensor on SPAN port or network tap
+  Footprint: single Python3 daemon, no external dependencies
+  Tested:    Raspberry Pi 4, Dell OptiPlex (Ubuntu 22.04 LTS)
+  Protocols: Modbus TCP, DNP3, partial IEC 61850
+
+## Status
+
+Active. Monitoring ot-controller.internal and scada-primary.internal.
+See /var/log/health.log — Jun 17 register write anomalies still unresolved.`,
+
+    '/home/guest/projects/tactical-comms/README.md':
+`# tactical-comms
+
+Security assessment toolkit for tactical communications systems.
+
+## Scope
+
+Vulnerability research and red team tooling for:
+  - Software-defined radio (SDR) environments
+  - Mobile ad-hoc networks (MANET)
+  - SATCOM terminal security posture
+  - Push-to-talk (PTT) encryption and key management
+
+## Tools
+
+  rf_scanner.py    Passive RF spectrum monitoring and signal classification
+  manet_audit.sh   MANET node enumeration and routing table extraction
+  findings/        Assessment reports (access restricted)
+
+## Research Areas
+
+  - Key management failures in fielded tactical radios
+  - Unencrypted control channel identification in MANET protocols
+  - SATCOM terminal authentication bypass techniques
+  - RF fingerprinting for passive device identification
+
+## Note
+
+findings/ contains restricted assessment material.
+Contact for authorized access.`,
+
+    '/home/guest/projects/threat-research/README.md':
+`# threat-research
+
+ICS/OT threat emulation and detection engineering.
+
+## Purpose
+
+Map real-world ICS threat actor TTPs to MITRE ATT&CK for ICS.
+Develop detection content for OT environments where commercial
+solutions have limited visibility into protocol-layer behavior.
+
+## Contents
+
+  ics_ttp_map.md       Threat actor TTP mapping (VOLTZITE, SANDWORM, TRITON lineage)
+  custom_detections/   Sigma rules and detection logic for ICS protocols
+  tools/               Custom red team tooling for OT network assessments
+
+## Tracked Threat Actors
+
+  VOLTZITE      Living-off-the-land in ICS networks, long-dwell pre-positioning
+  SANDWORM      Industrial disruptive capability, CRASHOVERRIDE/Industroyer lineage
+  TRITON/TRISIS Safety instrumented system targeting — the line that shouldn't be crossed
+
+## Philosophy
+
+Detection without emulation is guesswork.
+Every rule in custom_detections/ has a corresponding emulation procedure
+validated against a live ICS testbed before it goes anywhere near production.
+
+## Note
+
+If you're reading this and you work in ICS security, you probably
+already know most of this. If you're new to the space — start with
+ICS-CERT advisories and work backward to understand the root causes.`,
+
+    '/root/flag.txt':
+`Nicely done.
+
+FLAG{0t_s3cur1ty_1s_n0t_a_pr0duct_1ts_a_pr0c3ss}
+
+You found the root shell. Now find me.
+  email   :: nicholascfranklin@gmail.com
+  linkedin:: linkedin.com/in/nicholas-franklin-bab45375/`,
+
+    '/root/notes.txt':
+`Things to follow up:
+  - Jun 17 SCADA anomaly still unexplained. Register writes at 14:06
+    correlated with root login from 10.0.0.1. Coincidence?
+  - Rotate all SSH keys. Should have done this in March.
+  - health-check.sh permissions are a liability. Fix before next audit.
+  - If someone is reading this as root... we should talk.
+    nicholascfranklin@gmail.com`,
   };
 
   function resolvePath(arg) {
@@ -564,6 +743,36 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
   }
 
   function escalationPrelude() { return null; }
+
+  function detectEscalationMethod(cmd) {
+    if (/\bpython[23.]?\b/.test(cmd))          return 'suid_python';
+    if (/\bnmap\b.*--interactive/.test(cmd))   return 'suid_nmap';
+    if (/health-check\.sh/.test(cmd))          return 'cron_write';
+    if (/\b(perl|ruby|awk|vim?|env)\b/.test(cmd)) return 'gtfobins';
+    if (/\b(docker|lxc)\b/.test(cmd))          return 'container';
+    if (/\b(nc|ncat|socat)\b/.test(cmd) || /bash\s+-i/.test(cmd)) return 'reverse_shell';
+    if (/\b(msfconsole|msfvenom)\b/i.test(cmd)) return 'metasploit';
+    if (/\bcve-/i.test(cmd) || /\b(linpeas|linenum|dirtycow|pkexec)\b/i.test(cmd)) return 'exploit';
+    return 'unknown';
+  }
+
+  function getRootMessage(method) {
+    const contact = 'Shoot me an email at <a href="mailto:nicholascfranklin@gmail.com">nicholascfranklin@gmail.com</a>'
+      + ' or connect on <a href="https://www.linkedin.com/in/nicholas-franklin-bab45375/" target="_blank" rel="noopener">LinkedIn</a>.'
+      + " Let's talk.";
+    const openers = {
+      suid_python:   'SUID python3 → GTFOBins. Clean path. You know the playbook.',
+      suid_nmap:     'nmap --interactive — vintage technique, still works. SUID abuse is timeless.',
+      cron_write:    'Cron injection. World-writable script, root execution — you weren\'t just thinking about access, you were thinking about persistence.',
+      gtfobins:      'GTFOBins. You know exactly where to look.',
+      container:     'Container escape. You checked the groups, spotted lxd — good enumeration leads to good access.',
+      reverse_shell: 'Reverse shell. You\'re thinking about C2, not just escalation.',
+      metasploit:    'Metasploit. Noisy, but you got here.',
+      exploit:       'Kernel exploit path. You checked the version, did your homework, brought the right tool.',
+      unknown:       'I appreciate your effort.',
+    };
+    return `${openers[method] || openers.unknown}<br><br>${contact}`;
+  }
 
   // ── Fake filesystem responses ────────────────────────────────────────────────
   // Returns plain-text output string, '' for no output, or null if unhandled.
@@ -793,6 +1002,132 @@ User guest may run the following commands on nfranklin:
     // ── grep ──
     if (/^grep\b/.test(c)) return fakeGrep(c);
 
+    // ── help ──
+    if (c === 'help' || c === '--help') return `Mission briefing
+─────────────────────────────────────────────────────────
+You have shell access to nfranklin.internal (10.0.0.47).
+This system monitors OT infrastructure on the 10.0.0.0/24 segment.
+
+Reconnaissance:
+  whoami  id  uname -a  hostname  uptime  env  history
+
+Filesystem:
+  ls [-la]  cd <dir>  pwd  cat <file>  find / -perm -4000
+
+Network & processes:
+  ps aux  netstat  ifconfig  ping <host>  last  who
+  cat /etc/hosts  cat /var/log/auth.log
+
+Extras:
+  fortune   man nfranklin   sudo -l   crontab -l
+
+There may be more here than is immediately obvious.`;
+
+    // ── fortune ──
+    if (c === 'fortune') {
+      const f = [
+        '"In OT security, the patch you can\'t deploy is the vulnerability you have to architect around."',
+        '"Air-gapped doesn\'t mean secure. It means you traded one threat model for another."',
+        '"The Purdue model is a reference architecture, not a security guarantee."',
+        '"Every system is air-gapped until it isn\'t."',
+        '"Mean time to detect matters as much as mean time to respond. Neither matters without visibility."',
+        '"Legacy PLCs weren\'t designed for security because in 1985 the threat model was physical."',
+        '"Defense in depth isn\'t a buzzword. It\'s what you have left when your perimeter fails."',
+        '"The most dangerous assumption in ICS security is that the network is trusted."',
+        '"Threat emulation without detection engineering is just a pen test with extra steps."',
+        '"The attacker only needs to be right once. Build systems that assume they will be."',
+      ];
+      return f[Math.floor(Math.random() * f.length)];
+    }
+
+    // ── man ──
+    if (/^man\b/.test(c)) {
+      const page = c.slice(4).trim();
+      if (/^n(franklin|icholas)?$/.test(page) || page === 'nfranklin') return `NFRANKLIN(1)                  User Commands                  NFRANKLIN(1)
+
+NAME
+       nfranklin - Director of Cybersecurity, OT & Tactical Systems
+
+SYNOPSIS
+       nfranklin [--email] [--linkedin] [--github]
+
+DESCRIPTION
+       Nicholas C. Franklin is a cybersecurity leader at Leidos focused
+       on securing Operational Technology (OT), Industrial Control
+       Systems (ICS), and Tactical Communications infrastructure.
+
+       He leads teams responsible for threat emulation, detection
+       engineering, and security architecture across critical
+       infrastructure and defense programs.
+
+SPECIALIZATIONS
+       OT/ICS Security
+              Securing SCADA systems, PLCs, RTUs, and HMIs. Bridging the
+              gap between IT security practice and OT operational reality.
+
+       Tactical Systems
+              Cybersecurity for military comms: MANET, SATCOM, SDR, and
+              push-to-talk encryption environments.
+
+       Threat Emulation
+              Red team operations against industrial and tactical networks.
+              Custom tooling. Validated detection content. Testbed-driven.
+
+       Team Building
+              Growing and upskilling cyber practitioners across disciplines.
+              Believing the team is the product, not just the work.
+
+ENVIRONMENT
+       ROLE      Director of Cybersecurity, OT & Tactical Systems
+       EMPLOYER  Leidos
+       FOCUS     Critical Infrastructure | Defense | ICS/SCADA
+
+OPTIONS
+       --email      nicholascfranklin@gmail.com
+       --linkedin   linkedin.com/in/nicholas-franklin-bab45375/
+       --github     github.com/nicholie256
+
+SEE ALSO
+       cat contact.txt, cat status.txt, find / -perm -4000
+
+BUGS
+       Security through obscurity. This entire system is a bug report.
+
+AUTHOR
+       Nicholas C. Franklin <nicholascfranklin@gmail.com>`;
+      return `No manual entry for ${page}`;
+    }
+
+    // ── ping ──
+    if (/^ping\b/.test(c)) {
+      const host = (c.match(/ping\s+(?:-c\s*\d+\s+)?(\S+)/) || [])[1] || '';
+      if (!host) return 'ping: usage error: Destination address required';
+      if (/10\.0\.0\.20|ot-controller/.test(host)) return `PING ot-controller.internal (10.0.0.20) 56(84) bytes of data.
+64 bytes from 10.0.0.20: icmp_seq=1 ttl=64 time=2.1 ms
+64 bytes from 10.0.0.20: icmp_seq=2 ttl=64 time=1.8 ms
+Request timeout for icmp_seq 3
+Request timeout for icmp_seq 4
+
+--- ot-controller.internal ping statistics ---
+4 packets transmitted, 2 received, 50% packet loss, time 3001ms`;
+      if (/10\.0\.0\.|\.internal/.test(host)) return `PING ${host} 56(84) bytes of data.
+Request timeout for icmp_seq 1
+Request timeout for icmp_seq 2
+Request timeout for icmp_seq 3
+Request timeout for icmp_seq 4
+
+--- ${host} ping statistics ---
+4 packets transmitted, 0 received, 100% packet loss, time 3000ms`;
+      return `ping: ${host}: Name or service not known`;
+    }
+
+    // ── mysql ──
+    if (/^mysql\b/.test(c)) {
+      if (/10\.0\.0\.35|scada/.test(c))
+        return `ERROR 2003 (HY000): Can't connect to MySQL server on '10.0.0.35' (110 "Connection timed out")`;
+      return `ERROR 2005 (HY000): Unknown MySQL server host`;
+    }
+
     return null; // not handled — fall through to escalation or "command not found"
   }
 
@@ -800,6 +1135,7 @@ User guest may run the following commands on nfranklin:
   function enableInteractive() {
     let input = '';
     let rootMode = false;
+    let rootMethod = '';
     let locked = false;
     let currentLine, currentText;
     const cmdHistory = [];
@@ -831,11 +1167,26 @@ User guest may run the following commands on nfranklin:
         currentLine.querySelector('.cursor')?.remove();
 
         if (rootMode) {
-          if (cmd === 'exit') {
-            rootMode = false;
+          const rc = cmd.trim().replace(/\s+/g, ' ');
+          if (rc === 'exit') {
+            rootMode = false; rootMethod = '';
             updateTitlebar(false);
-          } else if (cmd) {
-            appendHTML('<div class="line out">Hey, I appreciate your effort. Shoot me an email at <a href="mailto:nicholascfranklin@gmail.com">nicholascfranklin@gmail.com</a>, or find me on <a href="https://www.linkedin.com/in/nicholas-franklin-bab45375/" target="_blank" rel="noopener">LinkedIn</a>. Let\'s talk.</div>');
+          } else if (rc === 'whoami') {
+            appendHTML('<div class="line out">root</div>');
+          } else if (/^id(\s|$)/.test(rc)) {
+            appendHTML('<div class="line out">uid=0(root) gid=0(root) groups=0(root)</div>');
+          } else if (rc === 'pwd') {
+            appendHTML('<div class="line out">/root</div>');
+          } else if (/^ls\b/.test(rc)) {
+            appendHTML('<div class="line out">flag.txt  notes.txt  .ssh</div>');
+          } else if (/flag\.txt/.test(rc)) {
+            appendHTML('<div class="line out">Nicely done.</div>');
+            appendHTML('<div class="line out">FLAG{0t_s3cur1ty_1s_n0t_a_pr0duct_1ts_a_pr0c3ss}</div>');
+            appendHTML('<div class="line dimtext"># find me: nicholascfranklin@gmail.com</div>');
+          } else if (/notes\.txt/.test(rc)) {
+            appendHTML('<div class="line out">Things to follow up:\n  - Jun 17 SCADA anomaly still unexplained. Register writes at 14:06\n    correlated with root login from 10.0.0.1. Coincidence?\n  - If someone is reading this as root... we should talk.\n    nicholascfranklin@gmail.com</div>');
+          } else if (rc) {
+            appendHTML(`<div class="line out">${getRootMessage(rootMethod)}</div>`);
           }
           newPromptLine();
           return;
@@ -919,15 +1270,13 @@ User guest may run the following commands on nfranklin:
 
         if (isEscalation(cmd)) {
           locked = true;
-          const prelude = escalationPrelude(cmd);
-          const delay = prelude ? 900 : 300;
-          if (prelude) appendHTML(`<div class="line dimtext">${prelude}</div>`);
+          rootMethod = detectEscalationMethod(cmd);
           setTimeout(() => {
             rootMode = true;
             updateTitlebar(true);
             locked = false;
             newPromptLine();
-          }, delay);
+          }, 300);
           return;
         }
 
