@@ -185,15 +185,17 @@
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  function scrollBottom() {
-    body.scrollTop = body.scrollHeight;
-  }
+  function scrollBottom() { body.scrollTop = body.scrollHeight; }
 
   function appendHTML(html) {
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     while (tmp.firstChild) body.appendChild(tmp.firstChild);
     scrollBottom();
+  }
+
+  function escapeHTML(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   async function typeCmd(cmd) {
@@ -216,6 +218,65 @@
     cur.remove();
   }
 
+  function enableInteractive() {
+    let input = '';
+    let currentLine, currentText;
+
+    function newPromptLine() {
+      input = '';
+      currentLine = document.createElement('div');
+      currentLine.className = 'line';
+      currentLine.innerHTML = PROMPT;
+      currentText = document.createElement('span');
+      const cur = document.createElement('span');
+      cur.className = 'cursor';
+      currentLine.appendChild(currentText);
+      currentLine.appendChild(cur);
+      body.appendChild(currentLine);
+      scrollBottom();
+    }
+
+    newPromptLine();
+
+    document.addEventListener('keydown', function handler(e) {
+      if (e.key === 'Enter') {
+        const cmd = input.trim();
+        currentLine.querySelector('.cursor')?.remove();
+
+        if (cmd === 'exit') {
+          appendHTML('<div class="line dimtext">logout</div>');
+          document.removeEventListener('keydown', handler);
+          setTimeout(() => {
+            window.close();
+            appendHTML('<div class="line dimtext">[close this tab to exit]</div>');
+          }, 400);
+          return;
+        }
+
+        if (cmd) {
+          appendHTML(`<div class="line dimtext">-bash: ${escapeHTML(cmd)}: command not found</div>`);
+        }
+        newPromptLine();
+
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        input = input.slice(0, -1);
+        currentText.textContent = input;
+
+      } else if (e.ctrlKey && e.key === 'c') {
+        e.preventDefault();
+        currentLine.querySelector('.cursor')?.remove();
+        currentLine.appendChild(document.createTextNode('^C'));
+        newPromptLine();
+
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        input += e.key;
+        currentText.textContent = input;
+        scrollBottom();
+      }
+    });
+  }
+
   async function run() {
     for (const step of steps) {
       if (step.kind === 'instant') {
@@ -229,11 +290,7 @@
       }
     }
 
-    const finalLine = document.createElement('div');
-    finalLine.className = 'line';
-    finalLine.innerHTML = PROMPT + '<span class="cursor"></span>';
-    body.appendChild(finalLine);
-    scrollBottom();
+    enableInteractive();
   }
 
   run();
