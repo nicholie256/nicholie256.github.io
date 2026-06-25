@@ -191,7 +191,7 @@
     const a = flags.includes('a'), l = flags.includes('l');
     switch (path) {
       case '/home/guest':
-        if (a) return `total 52
+        if (a) return `total 64
 drwxr-xr-x 6 guest guest 4096 Jun 21 13:42 .
 drwxr-xr-x 3 root  root  4096 Mar 15 09:22 ..
 -rw------- 1 guest guest  847 Jun 21 13:41 .bash_history
@@ -199,14 +199,20 @@ drwxr-xr-x 3 root  root  4096 Mar 15 09:22 ..
 -rw-r--r-- 1 guest guest 3526 Mar 15 09:22 .bashrc
 -rw-r--r-- 1 guest guest  807 Mar 15 09:22 .profile
 drwx------ 2 guest guest 4096 Mar 15 09:45 .ssh
-drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+-rw-r--r-- 1 guest guest  891 Jun 24 08:00 experience.txt
 -rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
-drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
-        if (l) return `total 20
 drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts
+-rw-r--r-- 1 guest guest  148 Jun 24 08:00 skills.txt
+-rw-r--r-- 1 guest guest   98 Jun 24 08:00 status.txt`;
+        if (l) return `total 32
+drwxr-xr-x 4 guest guest 4096 Jun 10 14:33 projects
+-rw-r--r-- 1 guest guest  891 Jun 24 08:00 experience.txt
 -rw-r--r-- 1 guest guest  312 Jun 18 09:17 notes.txt
-drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts`;
-        return 'notes.txt  projects  scripts';
+drwxr-xr-x 2 guest guest 4096 May 22 11:08 scripts
+-rw-r--r-- 1 guest guest  148 Jun 24 08:00 skills.txt
+-rw-r--r-- 1 guest guest   98 Jun 24 08:00 status.txt`;
+        return 'experience.txt  notes.txt  projects  scripts  skills.txt  status.txt';
       case '/home/guest/.ssh':
         if (l || a) return `total 24
 drwx------ 2 guest guest 4096 Mar 15 09:45 .
@@ -548,6 +554,41 @@ You found the root shell. Now find me.
   email   :: nicholascfranklin@gmail.com
   linkedin:: linkedin.com/in/nicholas-franklin-bab45375/`,
 
+    '/home/guest/status.txt':
+`> Focus:        OT / ICS / Critical Infrastructure / Tactical Systems
+> Location:     United States (clearance eligible)
+> Availability: open to new opportunities — senior leadership roles in OT/ICS security or defense cyber programs`,
+
+    '/home/guest/experience.txt':
+`Nicholas C. Franklin — Cybersecurity Leader
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+> Director-level cybersecurity leadership across OT, ICS, and tactical systems programs
+> Built and executed threat emulation programs against live ICS testbeds
+> Developed detection engineering content for Modbus, DNP3, IEC 61850, OPC-UA
+> Led red team assessments across SCADA, PLC, RTU, and HMI environments
+> Assessed tactical comms security: MANET, SATCOM, SDR, and PTT encryption systems
+> Designed security architectures aligned to IEC 62443, NIST 800-82, MITRE ATT&CK for ICS
+> Recruited, developed, and retained high-performing cyber practitioners at scale
+> Program leadership across multiple concurrent defense and critical infrastructure contracts
+
+LOOKING FOR
+> VP / Director / Chief-level roles in OT or defense cyber programs
+> Organizations serious about ICS visibility, threat emulation, and real-world detection
+> Reach out: nicholascfranklin@gmail.com`,
+
+    '/home/guest/skills.txt':
+`Technical
+  OT / ICS Security        Critical Infrastructure    SCADA / DCS / PLC
+  IEC 62443                NIST 800-82                MITRE ATT&CK for ICS
+  Threat Emulation         Detection Engineering      Security Architecture
+  Penetration Testing      Vulnerability Research     Modbus / DNP3 / OPC-UA
+  Tactical Communications  SDR / MANET / SATCOM       PTT Encryption Assessment
+
+Leadership
+  Team Leadership          Program Management         Cyber Strategy
+  Workforce Development    Stakeholder Management     Cross-functional Execution`,
+
     '/root/notes.txt':
 `Things to follow up:
   - Jun 17 SCADA anomaly still unexplained. Register writes at 14:06
@@ -637,7 +678,11 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
     {
       kind: 'cmd',
       cmd: 'cat status.txt',
-      html: '<div class="line out">&gt; Focus: OT / ICS / Tactical Systems cybersecurity\n&gt; Availability: not accepting consideration for other positions at this time</div>'
+      html: '<div class="line out">' +
+            '&gt; Focus:        OT / ICS / Critical Infrastructure / Tactical Systems\n' +
+            '&gt; Location:     United States (clearance eligible)\n' +
+            '&gt; Availability: <span class="accent">open to new opportunities</span> — senior leadership roles in OT/ICS security or defense cyber programs' +
+            '</div>'
     },
     {
       kind: 'cmd',
@@ -645,12 +690,34 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
       html: '<div class="line"><div class="tags">' +
             '<span class="tag">OT / ICS Security</span>' +
             '<span class="tag">Critical Infrastructure</span>' +
+            '<span class="tag">SCADA / DCS / PLC</span>' +
+            '<span class="tag">IEC 62443</span>' +
+            '<span class="tag">NIST 800-82</span>' +
             '<span class="tag">Threat Emulation</span>' +
+            '<span class="tag">Detection Engineering</span>' +
+            '<span class="tag">Security Architecture</span>' +
+            '<span class="tag">Penetration Testing</span>' +
+            '<span class="tag">Vulnerability Research</span>' +
+            '<span class="tag">Tactical Communications</span>' +
+            '<span class="tag">SDR / MANET / SATCOM</span>' +
             '<span class="tag">Team Leadership</span>' +
-            '<span class="tag">Research and Development</span>' +
+            '<span class="tag">Program Management</span>' +
             '<span class="tag">Cyber Strategy</span>' +
-            '<span class="tag">Upskilling Cyber Professionals</span>' +
+            '<span class="tag">Workforce Development</span>' +
             '</div></div>'
+    },
+    {
+      kind: 'cmd',
+      cmd: 'cat experience.txt',
+      html: '<div class="line out">' +
+            '&gt; Director-level cybersecurity leadership across OT, ICS, and tactical systems programs\n' +
+            '&gt; Built and executed threat emulation programs against live ICS testbeds\n' +
+            '&gt; Developed detection engineering content for Modbus, DNP3, IEC 61850, OPC-UA\n' +
+            '&gt; Led red team assessments across SCADA, PLC, RTU, and HMI environments\n' +
+            '&gt; Assessed tactical comms security: MANET, SATCOM, SDR, and PTT systems\n' +
+            '&gt; Designed architectures aligned to IEC 62443, NIST 800-82, MITRE ATT&amp;CK for ICS\n' +
+            '&gt; Recruited, developed, and retained high-performing cyber practitioners at scale' +
+            '</div>'
     },
     {
       kind: 'cmd',
@@ -1008,6 +1075,10 @@ User guest may run the following commands on nfranklin:
 You have shell access to nfranklin.internal (10.0.0.47).
 This system monitors OT infrastructure on the 10.0.0.0/24 segment.
 
+Start here:
+  cat status.txt       cat experience.txt   cat skills.txt
+  cat notes.txt        cat contact.txt
+
 Reconnaissance:
   whoami  id  uname -a  hostname  uptime  env  history
 
@@ -1046,41 +1117,50 @@ There may be more here than is immediately obvious.`;
       if (/^n(franklin|icholas)?$/.test(page) || page === 'nfranklin') return `NFRANKLIN(1)                  User Commands                  NFRANKLIN(1)
 
 NAME
-       nfranklin - Director of Cybersecurity, OT & Tactical Systems
+       nfranklin - Cybersecurity Leader | OT/ICS | Tactical Systems | Defense
 
 SYNOPSIS
        nfranklin [--email] [--linkedin] [--github]
 
 DESCRIPTION
-       Nicholas C. Franklin is a cybersecurity leader at Leidos focused
-       on securing Operational Technology (OT), Industrial Control
-       Systems (ICS), and Tactical Communications infrastructure.
+       Nicholas C. Franklin is a director-level cybersecurity leader with
+       deep expertise in Operational Technology (OT), Industrial Control
+       Systems (ICS), and Tactical Communications security.
 
-       He leads teams responsible for threat emulation, detection
-       engineering, and security architecture across critical
-       infrastructure and defense programs.
+       Currently open to senior leadership opportunities — VP, Director,
+       or Chief-level roles at the intersection of cybersecurity, critical
+       infrastructure, and defense.
 
 SPECIALIZATIONS
-       OT/ICS Security
-              Securing SCADA systems, PLCs, RTUs, and HMIs. Bridging the
-              gap between IT security practice and OT operational reality.
-
-       Tactical Systems
-              Cybersecurity for military comms: MANET, SATCOM, SDR, and
-              push-to-talk encryption environments.
+       OT / ICS Security
+              Securing SCADA, DCS, PLC, RTU, and HMI environments.
+              Protocol-level expertise: Modbus, DNP3, IEC 61850, OPC-UA.
+              Architecture aligned to IEC 62443 and NIST 800-82.
 
        Threat Emulation
               Red team operations against industrial and tactical networks.
-              Custom tooling. Validated detection content. Testbed-driven.
+              Built emulation programs from the ground up against live ICS
+              testbeds. MITRE ATT&CK for ICS mapping and validation.
 
-       Team Building
-              Growing and upskilling cyber practitioners across disciplines.
-              Believing the team is the product, not just the work.
+       Detection Engineering
+              Custom detection content for OT environments where commercial
+              tooling lacks protocol visibility. Sigma rules, custom sensors,
+              and behavioral analytics for industrial protocols.
+
+       Tactical Systems
+              Cybersecurity for military comms: MANET, SATCOM, SDR, and
+              push-to-talk encryption environments. Vulnerability research
+              and red team assessment of fielded tactical systems.
+
+       Leadership
+              Director-level P&L and program ownership. Recruited, developed,
+              and retained high-performing cyber teams. Upskilling practitioners
+              at scale. The team is the product.
 
 ENVIRONMENT
-       ROLE      Director of Cybersecurity, OT & Tactical Systems
-       EMPLOYER  Leidos
-       FOCUS     Critical Infrastructure | Defense | ICS/SCADA
+       STATUS    Open to new opportunities
+       FOCUS     Critical Infrastructure | Defense | OT/ICS | Tactical Systems
+       LOCATION  United States (clearance eligible)
 
 OPTIONS
        --email      nicholascfranklin@gmail.com
@@ -1088,7 +1168,7 @@ OPTIONS
        --github     github.com/nicholie256
 
 SEE ALSO
-       cat contact.txt, cat status.txt, find / -perm -4000
+       cat experience.txt, cat skills.txt, cat contact.txt
 
 BUGS
        Security through obscurity. This entire system is a bug report.
