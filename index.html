@@ -170,6 +170,48 @@
     '/opt', '/opt/monitoring', '/var', '/var/log', '/etc', '/tmp',
   ]);
 
+  // ── Directory entries for tab completion ─────────────────────────────────────
+  const DIR_ENTRIES = {
+    '/': ['bin','boot','dev','etc','home','lib','lib64','media','mnt','opt','proc','root','run','sbin','srv','sys','tmp','usr','var'].map(n => ({n,d:true})),
+    '/home': [{n:'guest',d:true}],
+    '/home/guest': [
+      {n:'.bash_history',d:false},{n:'.bashrc',d:false},{n:'.profile',d:false},
+      {n:'.ssh',d:true},{n:'experience.txt',d:false},{n:'notes.txt',d:false},
+      {n:'projects',d:true},{n:'scripts',d:true},{n:'skills.txt',d:false},{n:'status.txt',d:false},
+    ],
+    '/home/guest/.ssh': [
+      {n:'authorized_keys',d:false},{n:'id_rsa',d:false},{n:'id_rsa.pub',d:false},{n:'known_hosts',d:false},
+    ],
+    '/home/guest/projects': [
+      {n:'ot-monitor',d:true},{n:'tactical-comms',d:true},{n:'threat-research',d:true},
+    ],
+    '/home/guest/projects/ot-monitor': [
+      {n:'README.md',d:false},{n:'config.yaml',d:false},{n:'monitor.py',d:false},{n:'requirements.txt',d:false},
+    ],
+    '/home/guest/projects/tactical-comms': [
+      {n:'README.md',d:false},{n:'findings',d:true},{n:'manet_audit.sh',d:false},{n:'rf_scanner.py',d:false},
+    ],
+    '/home/guest/projects/threat-research': [
+      {n:'README.md',d:false},{n:'custom_detections',d:true},{n:'ics_ttp_map.md',d:false},{n:'tools',d:true},
+    ],
+    '/home/guest/scripts': [
+      {n:'backup.sh',d:false},{n:'deploy.sh',d:false},{n:'monitor.sh',d:false},
+    ],
+    '/opt': [{n:'monitoring',d:true}],
+    '/opt/monitoring': [{n:'health-check.sh',d:false}],
+    '/etc': [
+      'adduser.conf','bash.bashrc','cron.d','cron.daily','crontab','environment',
+      'fstab','group','hostname','hosts','issue','motd','nginx','os-release',
+      'passwd','profile','resolv.conf','shadow','shells','ssh','sudoers','timezone',
+    ].map(n => ({n, d:['cron.d','cron.daily','nginx','ssh'].includes(n)})),
+    '/var': ['backups','cache','lib','log','mail','opt','run','spool','tmp'].map(n => ({n,d:true})),
+    '/var/log': [
+      'auth.log','backup.log','dpkg.log','faillog','health.log','kern.log',
+      'lastlog','monitor.log','nginx','syslog','wtmp',
+    ].map(n => ({n, d: n === 'nginx'})),
+    '/tmp': [],
+  };
+
   function resolveCd(arg) {
     let t;
     if (!arg || arg === '~') { t = '/home/guest'; }
@@ -1212,6 +1254,62 @@ Request timeout for icmp_seq 4
     return null; // not handled — fall through to escalation or "command not found"
   }
 
+  // ── Tab completion ───────────────────────────────────────────────────────────
+  const COMMANDS = [
+    'bash','cat','cd','chmod','clear','crontab','df','echo','env','exit',
+    'file','find','fortune','free','grep','head','help','history','hostname',
+    'id','ifconfig','ip','last','ln','ls','man','mkdir','mysql','netstat',
+    'ping','printenv','ps','pwd','sh','ss','ssh','sudo','tail','touch',
+    'uname','uptime','w','who','whoami',
+  ];
+
+  function commonPfx(strs) {
+    if (!strs.length) return '';
+    let p = strs[0];
+    for (const s of strs.slice(1)) {
+      while (!s.startsWith(p)) p = p.slice(0, -1);
+      if (!p) break;
+    }
+    return p;
+  }
+
+  function tabComplete(inp) {
+    const parts = inp.match(/\S+/g) || [];
+    const trailingSpace = inp.endsWith(' ');
+
+    if (!trailingSpace && parts.length <= 1) {
+      const partial = parts[0] || '';
+      return { completions: COMMANDS.filter(c => c.startsWith(partial)), from: inp.length - partial.length, isCmd: true };
+    }
+
+    const lastArg = trailingSpace ? '' : parts[parts.length - 1];
+    const from = inp.length - lastArg.length;
+
+    let lookupDir, partial, pfx;
+    if (lastArg.includes('/')) {
+      const slash = lastArg.lastIndexOf('/');
+      const dirPart = lastArg.slice(0, slash) || '/';
+      partial = lastArg.slice(slash + 1);
+      pfx = lastArg.slice(0, slash + 1);
+      if (dirPart === '~') lookupDir = '/home/guest';
+      else if (dirPart.startsWith('/')) lookupDir = dirPart.replace(/\/+$/, '') || '/';
+      else if (dirPart.startsWith('~/')) lookupDir = '/home/guest/' + dirPart.slice(2);
+      else lookupDir = (currentPath === '/' ? '' : currentPath) + '/' + dirPart;
+      lookupDir = lookupDir.replace(/\/+/g, '/').replace(/(.+)\/$/, '$1') || '/';
+    } else {
+      lookupDir = currentPath;
+      partial = lastArg;
+      pfx = '';
+    }
+
+    const entries = DIR_ENTRIES[lookupDir] || [];
+    const showHidden = partial.startsWith('.');
+    const completions = entries
+      .filter(e => e.n.startsWith(partial) && (showHidden || !e.n.startsWith('.')))
+      .map(e => pfx + e.n + (e.d ? '/' : ''));
+    return { completions, from, isCmd: false };
+  }
+
   // ── Interactive shell ────────────────────────────────────────────────────────
   function enableInteractive() {
     let input = '';
@@ -1393,6 +1491,39 @@ Request timeout for icmp_seq 4
         e.preventDefault();
         input = input.slice(0, -1);
         currentText.textContent = input;
+
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        const tc = tabComplete(input);
+        if (!tc.completions.length) return;
+        if (tc.completions.length === 1) {
+          input = input.slice(0, tc.from) + tc.completions[0] + (tc.isCmd ? ' ' : '');
+          currentText.textContent = input;
+        } else {
+          const cp = commonPfx(tc.completions);
+          if (cp.length > input.slice(tc.from).length) {
+            input = input.slice(0, tc.from) + cp;
+            currentText.textContent = input;
+          } else {
+            currentLine.querySelector('.cursor')?.remove();
+            appendHTML('<div class="line dimtext">' +
+              tc.completions.map(c => escapeHTML(
+                c.endsWith('/') ? c.slice(0,-1).split('/').pop() + '/' : c.split('/').pop()
+              )).join('  ') +
+            '</div>');
+            currentLine = document.createElement('div');
+            currentLine.className = 'line';
+            currentLine.innerHTML = getPromptHTML();
+            currentText = document.createElement('span');
+            currentText.textContent = input;
+            const nc = document.createElement('span');
+            nc.className = 'cursor';
+            currentLine.appendChild(currentText);
+            currentLine.appendChild(nc);
+            body.appendChild(currentLine);
+            scrollBottom();
+          }
+        }
 
       } else if (e.ctrlKey && e.key === 'c') {
         e.preventDefault();
