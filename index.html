@@ -362,8 +362,8 @@ echo "Backup complete: $(date)" >> /var/log/backup.log`,
     '/home/guest/scripts/monitor.sh':
 `#!/bin/bash
 # Runs every 5 min via crontab
-ping -c1 10.0.0.20 &>/dev/null || echo "$(date): ot-controller unreachable" | mail -s "ALERT" nfranklin@leidos.com
-ping -c1 10.0.0.35 &>/dev/null || echo "$(date): scada-primary unreachable"  | mail -s "ALERT" nfranklin@leidos.com`,
+ping -c1 10.0.0.20 &>/dev/null || echo "$(date): ot-controller unreachable" | mail -s "ALERT" alerts@internal.local
+ping -c1 10.0.0.35 &>/dev/null || echo "$(date): scada-primary unreachable"  | mail -s "ALERT" alerts@internal.local`,
 
     '/home/guest/scripts/deploy.sh':
 `#!/bin/bash
@@ -673,7 +673,7 @@ scripts/backup.sh:# Automated backup - DO NOT SHARE`;
       kind: 'cmd',
       cmd: 'whoami',
       html: '<div class="line out">Nicholas C. Franklin</div>' +
-            '<div class="line out">Director of Cybersecurity for Operational Technology (OT) &amp; Tactical Systems @ <a href="https://www.leidos.com/" target="_blank" rel="noopener">Leidos</a></div>'
+            '<div class="line out">Cybersecurity Leader | OT / ICS / Critical Infrastructure &amp; Tactical Systems</div>'
     },
     {
       kind: 'cmd',
